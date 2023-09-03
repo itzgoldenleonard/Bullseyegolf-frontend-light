@@ -3,6 +3,7 @@
 - [X] Make mockups of all 4 pages
 - [X] Configure lighttpd properly for testing
 - [ ] Set everything up so that it works and is extensible but where the content is just a paragraph with the page title
+    - [ ] How am I gonna select the submit score page?
 - [ ] Make each page
 - [ ] Styling
 - [ ] Tests and error handling
