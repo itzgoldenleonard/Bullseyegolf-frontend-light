@@ -1,0 +1,20 @@
+body{
+margin:0 auto;
+max-width:50em;
+font:16px/1.5 'Roboto', 'Segoe', 'Segoe UI', 'Arial', sans-serif;
+padding:0 1em}
+
+
+h1,h2,h3,h4{line-height:1.2}
+
+kbd,pre{
+border: #888 solid 1px;
+border-radius: 6px;
+padding: 0.2em 0.4em;
+overflow-x: scroll}
+
+#title{
+text-align: center;
+margin-bottom: 1em}
+
+@media print{body{max-width:none}}
