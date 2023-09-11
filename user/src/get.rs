@@ -146,8 +146,28 @@ impl Page {
         })
     }
 
-    fn select_hole_page(_params: Params) -> PageRenderer {
-        Box::new(|b: &mut BodyBuilder| b.paragraph(|p| p.text("Select a hole")))
+    fn select_hole_page(params: Params) -> PageRenderer {
+        Box::new(move |b: &mut BodyBuilder| {
+            let tournament = fetch_tournament(
+                params.server,
+                params.query_args.user,
+                params.query_args.tournament.unwrap(),
+            );
+            b.heading_1(|h1| h1.id("title").text(tournament.tournament_name))
+                .paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)))
+                .heading_2(|h2| h2.text("Vælg et hul"))
+                .unordered_list(|ul| {
+                    for hole in tournament.holes {
+                        ul.list_item(|li| {
+                            li.anchor(|a| {
+                                a.text(format!("Hul {}", hole.hole_number))
+                                    .href(format!("{}&h={}", params.url, hole.hole_number))
+                            })
+                        });
+                    }
+                    ul
+                })
+        })
     }
 
     fn view_hole_page(_params: Params) -> PageRenderer {
@@ -158,7 +178,6 @@ impl Page {
         Box::new(|b: &mut BodyBuilder| b.paragraph(|p| p.text("Submit your score here")))
     }
 }
-
 
 #[derive(Deserialize)]
 struct ShortTournament {
@@ -171,6 +190,40 @@ struct ShortTournament {
 
 // TODO: Make this a fallible function
 fn fetch_short_tournaments(server: String, username: String) -> Vec<ShortTournament> {
-    let url = format!("https://{}/{}", server, username);
+    let url = format!("https://{server}/{username}");
     reqwest::blocking::get(url).unwrap().json().unwrap()
+}
+
+#[derive(Deserialize, Debug)]
+struct Tournament {
+    tournament_name: String,
+    tournament_sponsor: String,
+    holes: Vec<Hole>,
+}
+
+// TODO: Make this a fallible function
+fn fetch_tournament(server: String, username: String, tournament_id: String) -> Tournament {
+    let url = format!("https://{server}/{username}/{tournament_id}");
+    let client = reqwest::blocking::Client::new();
+    client
+        .get(url)
+        .header("No-Hole-Images", "true")
+        .send()
+        .unwrap()
+        .json()
+        .unwrap()
+}
+
+#[derive(Deserialize, Debug)]
+struct Hole {
+    hole_number: u8,
+    hole_text: String,
+    hole_sponsor: String,
+    scores: Vec<Score>,
+}
+
+#[derive(Deserialize, Debug)]
+struct Score {
+    player_name: String,
+    player_score: f64,
 }
