@@ -1,9 +1,9 @@
+use super::ShortTournament;
+use html::root::builders::BodyBuilder;
+use html::root::Html;
 use serde::Deserialize;
 use serde_qs as qs;
 use std::env;
-//use super::ShortTournament;
-use html::root::builders::BodyBuilder;
-use html::root::Html;
 
 enum Page {
     SelectTournament,
@@ -14,10 +14,10 @@ enum Page {
 
 type PageRenderer = Box<dyn for<'a> FnOnce(&'a mut BodyBuilder) -> &'a mut BodyBuilder>;
 
-impl TryFrom<Params> for Page {
+impl TryFrom<QueryParams> for Page {
     type Error = ();
 
-    fn try_from(value: Params) -> Result<Self, Self::Error> {
+    fn try_from(value: QueryParams) -> Result<Self, Self::Error> {
         use Page::*;
 
         Ok(match value.tournament {
@@ -31,10 +31,14 @@ impl TryFrom<Params> for Page {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
 struct Params {
-    #[serde(rename = "s")]
     server: String,
+    query_args: QueryParams,
+    url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct QueryParams {
     #[serde(rename = "u")]
     user: String,
     #[serde(rename = "t")]
@@ -44,11 +48,24 @@ struct Params {
     submit: Option<bool>,
 }
 
+impl Params {
+    pub fn new() -> Self {
+        let query_string = env::var("QUERY_STRING").unwrap();
+        let query_args: QueryParams = qs::from_str(&query_string).unwrap();
+        let server = env::var("SERVER_URL").unwrap();
+        let url = env::var("REQUEST_URI").unwrap();
+        Params {
+            server,
+            query_args,
+            url,
+        }
+    }
+}
+
 /// Main entrypoint for the user interface (not the submit endpoint)
 pub fn get() {
-    let query_string = env::var("QUERY_STRING").unwrap();
-    let params: Params = qs::from_str(&query_string).unwrap();
-    let page: Page = params.clone().try_into().unwrap();
+    let params: Params = Params::new();
+    let page: Page = params.query_args.clone().try_into().unwrap();
     let content = page.find_page_function()(params);
     println!("{}", insert_into_template(content));
 }
@@ -80,8 +97,24 @@ impl Page {
         }
     }
 
-    fn select_tournament_page(_params: Params) -> PageRenderer {
-        Box::new(|b: &mut BodyBuilder| b.paragraph(|p| p.text("Select a tournament")))
+    fn select_tournament_page(params: Params) -> PageRenderer {
+        Box::new(move |b: &mut BodyBuilder| {
+            let tournaments = fetch_short_tournaments(params.server, params.query_args.user);
+            let active_tournaments = tournaments.iter().filter(|t| t.active);
+            b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
+                .heading_2(|h2| h2.text("Aktive turneringer"))
+                .unordered_list(|ul| {
+                    for tournament in active_tournaments {
+                        ul.list_item(|li| {
+                            li.anchor(|a| {
+                                a.text(format!("{}", tournament.tournament_name))
+                                    .href(format!("{}&t={}", params.url, tournament.tournament_id))
+                            })
+                        });
+                    }
+                    ul
+                })
+        })
     }
 
     fn select_hole_page(_params: Params) -> PageRenderer {
@@ -97,6 +130,11 @@ impl Page {
     }
 }
 
+// TODO: Make this a fallible function
+fn fetch_short_tournaments(server: String, username: String) -> Vec<ShortTournament> {
+    let url = format!("https://{}/{}", server, username);
+    reqwest::blocking::get(url).unwrap().json().unwrap()
+}
 /*
 let url = format!("https://{}/{}", params.server, params.user);
 println!("Select a tournament from: {url}");

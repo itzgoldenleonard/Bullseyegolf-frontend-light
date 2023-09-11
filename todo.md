@@ -5,6 +5,8 @@
 - [ ] Styling
 - [ ] Tests and error handling
 
+## Select user (possibly)
+
 ## Select tournament page
 - [ ] Support for inactive but recently ended tournaments
 
