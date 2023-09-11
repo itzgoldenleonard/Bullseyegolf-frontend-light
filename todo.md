@@ -8,7 +8,7 @@
 ## Select user (possibly)
 
 ## Select tournament page
-- [ ] Support for inactive but recently ended tournaments
+- [X] Support for inactive but recently ended tournaments
 
 ## Select hole page
 

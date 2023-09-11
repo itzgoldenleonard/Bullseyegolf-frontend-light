@@ -1,9 +1,9 @@
-use super::ShortTournament;
 use html::root::builders::BodyBuilder;
 use html::root::Html;
 use serde::Deserialize;
 use serde_qs as qs;
 use std::env;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 enum Page {
     SelectTournament,
@@ -101,7 +101,16 @@ impl Page {
         Box::new(move |b: &mut BodyBuilder| {
             let tournaments = fetch_short_tournaments(params.server, params.query_args.user);
             let active_tournaments = tournaments.iter().filter(|t| t.active);
-            b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let recently_ended_tournaments: Vec<&ShortTournament> = tournaments
+                .iter()
+                .filter(|t| t.active == false && t.t_end >= current_time - 86400 * 3)
+                .collect();
+            let b = b
+                .heading_1(|h1| h1.id("title").text("Vælg en turnering"))
                 .heading_2(|h2| h2.text("Aktive turneringer"))
                 .unordered_list(|ul| {
                     for tournament in active_tournaments {
@@ -113,7 +122,27 @@ impl Page {
                         });
                     }
                     ul
-                })
+                });
+            if recently_ended_tournaments.len() == 0 {
+                return b;
+            } else {
+                return b
+                    .heading_2(|h2| h2.text("Afsluttede turneringer"))
+                    .unordered_list(|ul| {
+                        for tournament in recently_ended_tournaments {
+                            ul.list_item(|li| {
+                                li.anchor(|a| {
+                                    a.text(format!("{}", tournament.tournament_name))
+                                        .href(format!(
+                                            "{}&t={}",
+                                            params.url, tournament.tournament_id
+                                        ))
+                                })
+                            });
+                        }
+                        ul
+                    });
+            }
         })
     }
 
@@ -130,18 +159,18 @@ impl Page {
     }
 }
 
+
+#[derive(Deserialize)]
+struct ShortTournament {
+    active: bool,
+    //t_start: u64,
+    t_end: u64,
+    tournament_id: String,
+    tournament_name: String,
+}
+
 // TODO: Make this a fallible function
 fn fetch_short_tournaments(server: String, username: String) -> Vec<ShortTournament> {
     let url = format!("https://{}/{}", server, username);
     reqwest::blocking::get(url).unwrap().json().unwrap()
 }
-/*
-let url = format!("https://{}/{}", params.server, params.user);
-println!("Select a tournament from: {url}");
-let request: Vec<ShortTournament> = reqwest::blocking::get(url).unwrap().json().unwrap();
-let active_tournaments = request.iter().filter(|t| t.active);
-for tournament in active_tournaments {
-    list.list_item(|li| li.text(format!("{}", tournament.tournament_name)));
-}
-list
-*/
