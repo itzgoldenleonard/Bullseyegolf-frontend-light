@@ -170,8 +170,36 @@ impl Page {
         })
     }
 
-    fn view_hole_page(_params: Params) -> PageRenderer {
-        Box::new(|b: &mut BodyBuilder| b.paragraph(|p| p.text("This is the hole you selected")))
+    fn view_hole_page(params: Params) -> PageRenderer {
+        Box::new(move |b: &mut BodyBuilder| {
+            let hole = fetch_hole(
+                params.server,
+                params.query_args.user,
+                params.query_args.tournament.unwrap(),
+                params.query_args.hole.unwrap(),
+            );
+            b.heading_1(|h1| h1.id("title").text(hole.hole_text))
+                .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
+                .table(|table| {
+                    table.table_head(|thead| thead.table_row(|tr| {
+                        tr.table_header(|th| th.text("Nr.").scope("col"))
+                            .table_header(|th| th.text("Navn").scope("col"))
+                            .table_header(|th| th.text("Score").scope("col"))
+                    }))
+                    .table_body(|tbody| {
+                        for score in hole.scores.iter().enumerate() {
+                            tbody.table_row(|tr| {
+                                tr.table_cell(|td| td.text(format!("{}.", score.0)))
+                                    .table_cell(|td| td.text(score.1.player_name.clone()))
+                                    .table_cell(|td| td.text(format!("{}m", score.1.player_score)))
+                            });
+                        }
+                        tbody
+                    });
+                    table
+                })
+            .anchor(|a| a.href("/submit_score.html").text("Indsend notering"))
+        })
     }
 
     fn submit_score_page(_params: Params) -> PageRenderer {
@@ -226,4 +254,9 @@ struct Hole {
 struct Score {
     player_name: String,
     player_score: f64,
+}
+
+fn fetch_hole(server: String, username: String, tournament_id: String, hole_number: u8) -> Hole {
+    let url = format!("https://{server}/{username}/{tournament_id}/{hole_number}");
+    reqwest::blocking::get(url).unwrap().json().unwrap()
 }
