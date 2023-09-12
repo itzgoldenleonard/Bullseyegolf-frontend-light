@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="da">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light dark" />
+        <link rel="stylesheet" href="/user.css">
+        <title> Bullseyegolf light </title>
+    </head>
+    <body>
+        <h1 id="title"> Indsend notering </h1>
+        <form action="user" method="post">
+            <p>
+                <label for="name"> Navn: </label>
+                <input 
+                    id="name" 
+                    name="name" 
+                    type="text" 
+                    autocomplete="name" 
+                    maxlength="40"
+                    minlength="2"
+                    required/>
+            </p>
+            <p>
+                <label for="member"> Medlemsnummer: (ikke påkrævet) </label>
+                <input 
+                    id="member" 
+                    name="member"
+                    type="text"
+                    maxlength="11"
+                    minlength="2"
+                    pattern="\d*[\- ]?\d*"
+                    size="11"/>
+            </p>
+
+            <fieldset>
+                <legend> Distance: </legend>
+
+                <input 
+                    id="m" 
+                    name="score_m" 
+                    type="number" 
+                    min="0"
+                    max="25"
+                    step="1"
+                    required/>
+                <label for="m"> m </label>
+
+                <input 
+                    id="cm" 
+                    name="score_cm" 
+                    type="number" 
+                    max="99" 
+                    min="0"
+                    step="1"
+                    required/>
+                <label for="cm"> cm </label>
+            </fieldset>
+            <input type="submit" value="Indsend"/>
+        </form>
+    </body>
+</html>
+
+<!-- https://alistapart.com/article/sensibleforms/ -->
