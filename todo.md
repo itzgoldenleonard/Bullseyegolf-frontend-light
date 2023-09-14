@@ -3,8 +3,13 @@
 - [ ] Make each page
     - [ ] the URL param is not needed I can just type the \<a href\> url as format!("?u={user}&t={tournament}")
     - [ ] Migrate to `serde_urlencoded`
-- [ ] Styling
+- [-] Make submit functionality
+    - [X] Seperate the 2 types of score encodings
+    - [X] Convert between the 2
+    - [X] Redirect
+    - [ ] Make it unable to submit the same thing twice
 - [ ] Tests and error handling
+- [ ] Styling
 - [ ] Check through with <https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Cross_browser_testing/Accessibility>
 
 ## Select user (possibly)
