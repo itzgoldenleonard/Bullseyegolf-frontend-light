@@ -1,8 +1,6 @@
 # Get
 ## General
 - [ ] Make each page
-    - [ ] the URL param is not needed I can just type the \<a href\> url as format!("?u={user}&t={tournament}")
-    - [ ] Migrate to `serde_urlencoded`
 - [-] Make submit functionality
     - [X] Seperate the 2 types of score encodings
     - [X] Convert between the 2

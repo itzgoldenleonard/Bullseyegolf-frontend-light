@@ -1,7 +1,7 @@
 use html::root::builders::BodyBuilder;
 use html::root::Html;
 use serde::{Deserialize, Serialize};
-use serde_qs as qs;
+use serde_urlencoded as qs;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -9,32 +9,26 @@ enum Page {
     SelectTournament,
     SelectHole,
     ViewHole,
-    SubmitScore,
 }
 
 type PageRenderer = Box<dyn for<'a> FnOnce(&'a mut BodyBuilder) -> &'a mut BodyBuilder>;
 
-impl TryFrom<QueryParams> for Page {
-    type Error = ();
-
-    fn try_from(value: QueryParams) -> Result<Self, Self::Error> {
+impl From<QueryParams> for Page {
+    fn from(value: QueryParams) -> Self {
         use Page::*;
-
-        Ok(match value.tournament {
+        match value.tournament {
             None => SelectTournament,
             Some(_) => match value.hole {
                 None => SelectHole,
-                Some(_) if value.submit == Some(true) => SubmitScore,
                 Some(_) => ViewHole,
             },
-        })
+        }
     }
 }
 
 struct Params {
     server: String,
     query_args: QueryParams,
-    url: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -45,7 +39,6 @@ struct QueryParams {
     tournament: Option<String>,
     #[serde(rename = "h")]
     hole: Option<u8>,
-    submit: Option<bool>,
 }
 
 impl Params {
@@ -53,19 +46,14 @@ impl Params {
         let query_string = env::var("QUERY_STRING").unwrap();
         let query_args: QueryParams = qs::from_str(&query_string).unwrap();
         let server = env::var("SERVER_URL").unwrap();
-        let url = env::var("REQUEST_URI").unwrap();
-        Params {
-            server,
-            query_args,
-            url,
-        }
+        Params { server, query_args }
     }
 }
 
 /// Main entrypoint for the user interface (not the submit endpoint)
 pub fn get() {
     let params: Params = Params::new();
-    let page: Page = params.query_args.clone().try_into().unwrap();
+    let page: Page = params.query_args.clone().into();
     let content = page.find_page_function()(params);
     println!("{}", insert_into_template(content));
 }
@@ -93,13 +81,12 @@ impl Page {
             Self::SelectTournament => Self::select_tournament_page,
             Self::SelectHole => Self::select_hole_page,
             Self::ViewHole => Self::view_hole_page,
-            Self::SubmitScore => Self::submit_score_page,
         }
     }
 
     fn select_tournament_page(params: Params) -> PageRenderer {
         Box::new(move |b: &mut BodyBuilder| {
-            let tournaments = fetch_short_tournaments(params.server, params.query_args.user);
+            let tournaments = fetch_short_tournaments(params.server, params.query_args.user.clone());
             let active_tournaments = tournaments.iter().filter(|t| t.active);
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -117,7 +104,10 @@ impl Page {
                         ul.list_item(|li| {
                             li.anchor(|a| {
                                 a.text(format!("{}", tournament.tournament_name))
-                                    .href(format!("{}&t={}", params.url, tournament.tournament_id))
+                                    .href(format!(
+                                        "?u={}&t={}",
+                                        params.query_args.user, tournament.tournament_id
+                                    ))
                             })
                         });
                     }
@@ -134,8 +124,8 @@ impl Page {
                                 li.anchor(|a| {
                                     a.text(format!("{}", tournament.tournament_name))
                                         .href(format!(
-                                            "{}&t={}",
-                                            params.url, tournament.tournament_id
+                                            "?u={}&t={}",
+                                            params.query_args.user, tournament.tournament_id
                                         ))
                                 })
                             });
@@ -150,7 +140,7 @@ impl Page {
         Box::new(move |b: &mut BodyBuilder| {
             let tournament = fetch_tournament(
                 params.server,
-                params.query_args.user,
+                params.query_args.user.clone(),
                 params.query_args.tournament.unwrap(),
             );
             b.heading_1(|h1| h1.id("title").text(tournament.tournament_name))
@@ -160,8 +150,12 @@ impl Page {
                     for hole in tournament.holes {
                         ul.list_item(|li| {
                             li.anchor(|a| {
-                                a.text(format!("Hul {}", hole.hole_number))
-                                    .href(format!("{}&h={}", params.url, hole.hole_number))
+                                a.text(format!("Hul {}", hole.hole_number)).href(format!(
+                                    "?u={}&t={}&h={}",
+                                    params.query_args.user,
+                                    tournament.tournament_id,
+                                    hole.hole_number
+                                ))
                             })
                         });
                     }
@@ -181,29 +175,38 @@ impl Page {
             b.heading_1(|h1| h1.id("title").text(hole.hole_text))
                 .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
                 .table(|table| {
-                    table.table_head(|thead| thead.table_row(|tr| {
-                        tr.table_header(|th| th.text("Nr.").scope("col"))
-                            .table_header(|th| th.text("Navn").scope("col"))
-                            .table_header(|th| th.text("Score").scope("col"))
-                    }))
-                    .table_body(|tbody| {
-                        for score in hole.scores.iter().enumerate() {
-                            tbody.table_row(|tr| {
-                                tr.table_cell(|td| td.text(format!("{}.", score.0)))
-                                    .table_cell(|td| td.text(score.1.player_name.clone()))
-                                    .table_cell(|td| td.text(format!("{}m", score.1.player_score)))
-                            });
-                        }
-                        tbody
-                    });
+                    table
+                        .table_head(|thead| {
+                            thead.table_row(|tr| {
+                                tr.table_header(|th| th.text("Nr.").scope("col"))
+                                    .table_header(|th| th.text("Navn").scope("col"))
+                                    .table_header(|th| th.text("Score").scope("col"))
+                            })
+                        })
+                        .table_body(|tbody| {
+                            for score in hole.scores.iter().enumerate() {
+                                tbody.table_row(|tr| {
+                                    tr.table_cell(|td| td.text(format!("{}.", score.0 + 1)))
+                                        .table_cell(|td| td.text(score.1.player_name.clone()))
+                                        .table_cell(|td| {
+                                            td.text(format!("{}m", score.1.player_score))
+                                        })
+                                });
+                            }
+                            tbody
+                        });
                     table
                 })
-            .anchor(|a| a.href(format!("/submit_score.html?u={}&t={}&h={}", params.query_args.user, params.query_args.tournament.unwrap(), params.query_args.hole.unwrap())).text("Indsend notering"))
+                .anchor(|a| {
+                    a.href(format!(
+                        "/submit_score.html?u={}&t={}&h={}",
+                        params.query_args.user,
+                        params.query_args.tournament.unwrap(),
+                        hole.hole_number
+                    ))
+                    .text("Indsend notering")
+                })
         })
-    }
-
-    fn submit_score_page(_params: Params) -> PageRenderer {
-        Box::new(|b: &mut BodyBuilder| b.paragraph(|p| p.text("Submit your score here")))
     }
 }
 
@@ -224,6 +227,7 @@ fn fetch_short_tournaments(server: String, username: String) -> Vec<ShortTournam
 
 #[derive(Deserialize, Debug)]
 struct Tournament {
+    tournament_id: String,
     tournament_name: String,
     tournament_sponsor: String,
     holes: Vec<Hole>,
