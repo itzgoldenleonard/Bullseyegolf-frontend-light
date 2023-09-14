@@ -1,8 +1,8 @@
 # Get
 ## General
-- [-] How am I gonna select the submit score page?
 - [ ] Make each page
     - [ ] the URL param is not needed I can just type the \<a href\> url as format!("?u={user}&t={tournament}")
+    - [ ] Migrate to `serde_urlencoded`
 - [ ] Styling
 - [ ] Tests and error handling
 - [ ] Check through with <https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Cross_browser_testing/Accessibility>
@@ -25,4 +25,5 @@
 - [ ] Perhaps localize the numbers
 
 ## Submit score page
-- [ ] It might be possible to make this an entirely static thing
+- [X] It might be possible to make this an entirely static thing
+

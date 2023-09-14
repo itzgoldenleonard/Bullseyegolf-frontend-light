@@ -1,6 +1,6 @@
 use html::root::builders::BodyBuilder;
 use html::root::Html;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_qs as qs;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -174,8 +174,8 @@ impl Page {
         Box::new(move |b: &mut BodyBuilder| {
             let hole = fetch_hole(
                 params.server,
-                params.query_args.user,
-                params.query_args.tournament.unwrap(),
+                params.query_args.user.clone(),
+                params.query_args.tournament.clone().unwrap(),
                 params.query_args.hole.unwrap(),
             );
             b.heading_1(|h1| h1.id("title").text(hole.hole_text))
@@ -198,7 +198,7 @@ impl Page {
                     });
                     table
                 })
-            .anchor(|a| a.href("/submit_score.html").text("Indsend notering"))
+            .anchor(|a| a.href(format!("/submit_score.html?u={}&t={}&h={}", params.query_args.user, params.query_args.tournament.unwrap(), params.query_args.hole.unwrap())).text("Indsend notering"))
         })
     }
 
@@ -250,10 +250,10 @@ struct Hole {
     scores: Vec<Score>,
 }
 
-#[derive(Deserialize, Debug)]
-struct Score {
-    player_name: String,
-    player_score: f64,
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Score {
+    pub player_name: String,
+    pub player_score: f64,
 }
 
 fn fetch_hole(server: String, username: String, tournament_id: String, hole_number: u8) -> Hole {

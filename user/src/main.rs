@@ -1,5 +1,7 @@
 #![recursion_limit = "512"]
 mod get;
+mod post;
+use std::env;
 
 /** 
  * Params That need to be collected externally for get
@@ -18,6 +20,10 @@ mod get;
  */
 
 fn main() {
-    get::get();
+    if env::var("REQUEST_METHOD") == Ok("POST".to_owned()) {
+        post::post();
+    } else {
+        get::get();
+    }
 }
 
