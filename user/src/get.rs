@@ -32,7 +32,7 @@ struct QueryParams {
 impl Params {
     pub fn new() -> Result<Self, Error> {
         let query_string = env::var("QUERY_STRING").map_err(|e| Error::EnvVarReadError("QUERY_STRING", e))?;
-        let query_args: QueryParams = qs::from_str(&query_string).unwrap();
+        let query_args = qs::from_str(&query_string).map_err(|_| Error::InvalidQueryString)?;
         let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarReadError("SERVER_URL", e))?;
         Ok(Params { server, query_args })
     }
@@ -43,8 +43,6 @@ enum Page {
     SelectHole,
     ViewHole,
 }
-
-type PageRenderer = Box<dyn for<'a> FnOnce(&'a mut BodyBuilder) -> &'a mut BodyBuilder>;
 
 impl From<QueryParams> for Page {
     fn from(value: QueryParams) -> Self {
@@ -59,22 +57,7 @@ impl From<QueryParams> for Page {
     }
 }
 
-fn insert_into_template(content: PageRenderer) -> Html {
-    Html::builder()
-        .lang("da")
-        .head(|head| {
-            head.meta(|meta| meta.charset("utf-8"))
-                .meta(|meta| {
-                    meta.name("viewport")
-                        .content("width=device-width, initial-scale=1")
-                })
-                .meta(|meta| meta.name("color-scheme").content("light dark"))
-                .link(|link| link.rel("stylesheet").href("/user.css"))
-                .title_attr("Bullseyegolf light")
-        })
-        .body(content)
-        .build()
-}
+type PageRenderer = Box<dyn for<'a> FnOnce(&'a mut BodyBuilder) -> &'a mut BodyBuilder>;
 
 impl Page {
     pub fn find_page_function(self) -> fn(Params) -> PageRenderer {
@@ -88,7 +71,7 @@ impl Page {
     fn select_tournament_page(params: Params) -> PageRenderer {
         Box::new(move |b: &mut BodyBuilder| {
             let tournaments =
-                fetch_short_tournaments(params.server, params.query_args.user.clone());
+                fetch_short_tournaments(&params.server, &params.query_args.user);
             let active_tournaments = tournaments.iter().filter(|t| t.active);
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -141,10 +124,11 @@ impl Page {
     fn select_hole_page(params: Params) -> PageRenderer {
         Box::new(move |b: &mut BodyBuilder| {
             let tournament = fetch_tournament(
-                params.server,
-                params.query_args.user.clone(),
-                params.query_args.tournament.unwrap(),
-            );
+                &params.server,
+                &params.query_args.user,
+                &params.query_args.tournament.unwrap(),
+            ).expect("I need to figure out how to propogate this error");
+
             b.heading_1(|h1| h1.id("title").text(tournament.tournament_name))
                 .paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)))
                 .heading_2(|h2| h2.text("Vælg et hul"))
@@ -169,10 +153,10 @@ impl Page {
     fn view_hole_page(params: Params) -> PageRenderer {
         Box::new(move |b: &mut BodyBuilder| {
             let hole = fetch_hole(
-                params.server,
-                params.query_args.user.clone(),
-                params.query_args.tournament.clone().unwrap(),
-                params.query_args.hole.unwrap(),
+                &params.server,
+                &params.query_args.user,
+                params.query_args.tournament.as_ref().unwrap(),
+                &params.query_args.hole.unwrap(),
             );
             b.heading_1(|h1| h1.id("title").text(hole.hole_text))
                 .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
@@ -212,6 +196,23 @@ impl Page {
     }
 }
 
+fn insert_into_template(content: PageRenderer) -> Html {
+    Html::builder()
+        .lang("da")
+        .head(|head| {
+            head.meta(|meta| meta.charset("utf-8"))
+                .meta(|meta| {
+                    meta.name("viewport")
+                        .content("width=device-width, initial-scale=1")
+                })
+                .meta(|meta| meta.name("color-scheme").content("light dark"))
+                .link(|link| link.rel("stylesheet").href("/user.css"))
+                .title_attr("Bullseyegolf light")
+        })
+        .body(content)
+        .build()
+}
+
 #[derive(Deserialize)]
 struct ShortTournament {
     active: bool,
@@ -222,7 +223,7 @@ struct ShortTournament {
 }
 
 // TODO: Make this a fallible function
-fn fetch_short_tournaments(server: String, username: String) -> Vec<ShortTournament> {
+fn fetch_short_tournaments(server: &str, username: &str) -> Vec<ShortTournament> {
     let url = format!("https://{server}/{username}");
     reqwest::blocking::get(url).unwrap().json().unwrap()
 }
@@ -236,16 +237,16 @@ struct Tournament {
 }
 
 // TODO: Make this a fallible function
-fn fetch_tournament(server: String, username: String, tournament_id: String) -> Tournament {
+fn fetch_tournament(server: &str, username: &str, tournament_id: &str) -> Result<Tournament, Error> {
     let url = format!("https://{server}/{username}/{tournament_id}");
     let client = reqwest::blocking::Client::new();
     client
         .get(url)
         .header("No-Hole-Images", "true")
         .send()
-        .unwrap()
+        .map_err(|_| Error::NetworkError)?
         .json()
-        .unwrap()
+        .map_err(|_| Error::NetworkError)
 }
 
 // Make a function that builds a url from QueryParams
@@ -264,7 +265,7 @@ pub struct Score {
     pub player_score: f64,
 }
 
-fn fetch_hole(server: String, username: String, tournament_id: String, hole_number: u8) -> Hole {
+fn fetch_hole(server: &str, username: &str, tournament_id: &str, hole_number: &u8) -> Hole {
     let url = format!("https://{server}/{username}/{tournament_id}/{hole_number}");
     reqwest::blocking::get(url).unwrap().json().unwrap()
 }
