@@ -6,6 +6,38 @@ use serde_urlencoded as qs;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Main entrypoint for the user interface (not the submit endpoint)
+pub fn get() -> Result<String, Error> {
+    let params: Params = Params::new()?;
+    let page: Page = params.query_args.clone().into();
+    let content = page.find_page_function()(params);
+    Ok(insert_into_template(content).to_string())
+}
+
+struct Params {
+    server: String,
+    query_args: QueryParams,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct QueryParams {
+    #[serde(rename = "u")]
+    user: String,
+    #[serde(rename = "t")]
+    tournament: Option<String>,
+    #[serde(rename = "h")]
+    hole: Option<u8>,
+}
+
+impl Params {
+    pub fn new() -> Result<Self, Error> {
+        let query_string = env::var("QUERY_STRING").map_err(|e| Error::EnvVarReadError("QUERY_STRING", e))?;
+        let query_args: QueryParams = qs::from_str(&query_string).unwrap();
+        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarReadError("SERVER_URL", e))?;
+        Ok(Params { server, query_args })
+    }
+}
+
 enum Page {
     SelectTournament,
     SelectHole,
@@ -25,38 +57,6 @@ impl From<QueryParams> for Page {
             },
         }
     }
-}
-
-struct Params {
-    server: String,
-    query_args: QueryParams,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct QueryParams {
-    #[serde(rename = "u")]
-    user: String,
-    #[serde(rename = "t")]
-    tournament: Option<String>,
-    #[serde(rename = "h")]
-    hole: Option<u8>,
-}
-
-impl Params {
-    pub fn new() -> Self {
-        let query_string = env::var("QUERY_STRING").unwrap();
-        let query_args: QueryParams = qs::from_str(&query_string).unwrap();
-        let server = env::var("SERVER_URL").unwrap();
-        Params { server, query_args }
-    }
-}
-
-/// Main entrypoint for the user interface (not the submit endpoint)
-pub fn get() -> Result<String, Error> {
-    let params: Params = Params::new();
-    let page: Page = params.query_args.clone().into();
-    let content = page.find_page_function()(params);
-    Ok(insert_into_template(content).to_string())
 }
 
 fn insert_into_template(content: PageRenderer) -> Html {
