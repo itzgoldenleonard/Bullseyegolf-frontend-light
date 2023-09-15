@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::get::Score;
 use serde::Deserialize;
 use serde_urlencoded as qs;
@@ -31,16 +32,17 @@ impl Params {
 }
 
 /// Main entrypoint for score submission
-pub fn post() {
+pub fn post() -> Result<String, Error> {
     let params = Params::new();
 
     let mut score_buffer = String::new();
     let _ = stdin().read_line(&mut score_buffer);
     let score: CustomScore = qs::from_str(&score_buffer).unwrap(); // TODO: Try with from_reader
     submit_score(&params, score.into());
-    println!("Status: 303\r");
-    println!("Location: ?u={}&t={}&h={}\r", params.query_args.user, params.query_args.tournament, params.query_args.hole);
-    println!("\r\n\r");
+    Ok(format!(
+        "Status: 303\r\nLocation: ?u={}&t={}&h={}\r\n\r\n\r\n",
+        params.query_args.user, params.query_args.tournament, params.query_args.hole
+    ))
 }
 
 #[derive(Deserialize, Debug)]

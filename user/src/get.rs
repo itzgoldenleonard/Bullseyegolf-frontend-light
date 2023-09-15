@@ -1,3 +1,4 @@
+use crate::error::Error;
 use html::root::builders::BodyBuilder;
 use html::root::Html;
 use serde::{Deserialize, Serialize};
@@ -51,11 +52,11 @@ impl Params {
 }
 
 /// Main entrypoint for the user interface (not the submit endpoint)
-pub fn get() {
+pub fn get() -> Result<String, Error> {
     let params: Params = Params::new();
     let page: Page = params.query_args.clone().into();
     let content = page.find_page_function()(params);
-    println!("{}", insert_into_template(content));
+    Ok(insert_into_template(content).to_string())
 }
 
 fn insert_into_template(content: PageRenderer) -> Html {
@@ -86,7 +87,8 @@ impl Page {
 
     fn select_tournament_page(params: Params) -> PageRenderer {
         Box::new(move |b: &mut BodyBuilder| {
-            let tournaments = fetch_short_tournaments(params.server, params.query_args.user.clone());
+            let tournaments =
+                fetch_short_tournaments(params.server, params.query_args.user.clone());
             let active_tournaments = tournaments.iter().filter(|t| t.active);
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -245,6 +247,8 @@ fn fetch_tournament(server: String, username: String, tournament_id: String) -> 
         .json()
         .unwrap()
 }
+
+// Make a function that builds a url from QueryParams
 
 #[derive(Deserialize, Debug)]
 struct Hole {
