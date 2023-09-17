@@ -67,7 +67,7 @@ struct SelectTournamentPage {
 
 impl Render for SelectTournamentPage {
     fn render(&self, server: &str) -> Result<Body, Error> {
-        let tournaments = fetch_short_tournaments(server, &self.user)?;
+        let tournaments: Vec<ShortTournament> = Fetch::fetch(server, self)?;
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| {
@@ -120,7 +120,6 @@ impl Render for SelectTournamentPage {
     }
 }
 
-
 struct SelectHolePage {
     user: String,
     tournament: String,
@@ -128,7 +127,7 @@ struct SelectHolePage {
 
 impl Render for SelectHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
-        let tournament = fetch_tournament(server, &self.user, &self.tournament)?;
+        let tournament = Tournament::fetch(server, self)?;
 
         let mut b = Body::builder();
 
@@ -162,7 +161,7 @@ struct ViewHolePage {
 
 impl Render for ViewHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
-        let hole = fetch_hole(server, &self.user, &self.tournament, &self.hole)?;
+        let hole = Hole::fetch(server, self)?;
 
         let mut b = Body::builder();
 
@@ -200,10 +199,6 @@ impl Render for ViewHolePage {
     }
 }
 
-trait Render {
-    fn render(&self, server: &str) -> Result<Body, Error>;
-}
-
 #[derive(Deserialize)]
 struct ShortTournament {
     active: bool,
@@ -212,12 +207,16 @@ struct ShortTournament {
     tournament_name: String,
 }
 
-fn fetch_short_tournaments(server: &str, username: &str) -> Result<Vec<ShortTournament>, Error> {
-    let url = format!("https://{server}/{username}");
-    reqwest::blocking::get(url)
-        .map_err(|_| Error::NetworkError)?
-        .json()
-        .map_err(|_| Error::NetworkError)
+impl Fetch for Vec<ShortTournament> {
+    type Page = SelectTournamentPage;
+
+    fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
+        let url = format!("https://{}/{}", server, page.user);
+        reqwest::blocking::get(url)
+            .map_err(|_| Error::NetworkError)?
+            .json()
+            .map_err(|_| Error::NetworkError)
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -228,23 +227,21 @@ struct Tournament {
     holes: Vec<Hole>,
 }
 
-fn fetch_tournament(
-    server: &str,
-    username: &str,
-    tournament_id: &str,
-) -> Result<Tournament, Error> {
-    let url = format!("https://{server}/{username}/{tournament_id}");
-    let client = reqwest::blocking::Client::new();
-    client
-        .get(url)
-        .header("No-Hole-Images", "true")
-        .send()
-        .map_err(|_| Error::NetworkError)?
-        .json()
-        .map_err(|_| Error::NetworkError)
-}
+impl Fetch for Tournament {
+    type Page = SelectHolePage;
 
-// Make a function that builds a url from QueryParams
+    fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
+        let url = format!("https://{server}/{}/{}", page.user, page.tournament);
+        let client = reqwest::blocking::Client::new();
+        client
+            .get(url)
+            .header("No-Hole-Images", "true")
+            .send()
+            .map_err(|_| Error::NetworkError)?
+            .json()
+            .map_err(|_| Error::NetworkError)
+    }
+}
 
 #[derive(Deserialize, Debug)]
 struct Hole {
@@ -260,17 +257,19 @@ pub struct Score {
     pub player_score: f64,
 }
 
-fn fetch_hole(
-    server: &str,
-    username: &str,
-    tournament_id: &str,
-    hole_number: &u8,
-) -> Result<Hole, Error> {
-    let url = format!("https://{server}/{username}/{tournament_id}/{hole_number}");
-    reqwest::blocking::get(url)
-        .map_err(|_| Error::NetworkError)?
-        .json()
-        .map_err(|_| Error::NetworkError)
+impl Fetch for Hole {
+    type Page = ViewHolePage;
+
+    fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
+        let url = format!(
+            "https://{server}/{}/{}/{}",
+            page.user, page.tournament, page.hole
+        );
+        reqwest::blocking::get(url)
+            .map_err(|_| Error::NetworkError)?
+            .json()
+            .map_err(|_| Error::NetworkError)
+    }
 }
 
 fn insert_into_template(content: Body) -> Html {
@@ -289,3 +288,13 @@ fn insert_into_template(content: Body) -> Html {
         .push(content)
         .build()
 }
+
+trait Render {
+    fn render(&self, server: &str) -> Result<Body, Error>;
+}
+
+trait Fetch: Sized {
+    type Page;
+    fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error>;
+}
+
