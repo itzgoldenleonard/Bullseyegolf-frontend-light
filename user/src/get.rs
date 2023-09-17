@@ -1,6 +1,5 @@
 use crate::error::Error;
-use html::root::builders::BodyBuilder;
-use html::root::Html;
+use html::root::{Body, Html};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
 use std::env;
@@ -58,10 +57,8 @@ impl From<QueryParams> for Page {
     }
 }
 
-type PageRenderer = Box<dyn for<'a> FnOnce(&'a mut BodyBuilder) -> &'a mut BodyBuilder>;
-
 impl Page {
-    pub fn find_page_function(self) -> fn(Params) -> Result<PageRenderer, Error> {
+    pub fn find_page_function(self) -> fn(Params) -> Result<Body, Error> {
         match self {
             Self::SelectTournament => Self::select_tournament_page,
             Self::SelectHole => Self::select_hole_page,
@@ -69,24 +66,46 @@ impl Page {
         }
     }
 
-    fn select_tournament_page(params: Params) -> Result<PageRenderer, Error> {
+    fn select_tournament_page(params: Params) -> Result<Body, Error> {
         let tournaments = fetch_short_tournaments(&params.server, &params.query_args.user)?;
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| Error::GenericServerError("Unable to calculate current time (time went backwards)"))?
+            .map_err(|_| {
+                Error::GenericServerError("Unable to calculate current time (time went backwards)")
+            })?
             .as_secs();
 
-        Ok(Box::new(move |b: &mut BodyBuilder| {
-            let active_tournaments = tournaments.iter().filter(|t| t.active);
-            let recently_ended_tournaments: Vec<&ShortTournament> = tournaments
-                .iter()
-                .filter(|t| t.active == false && t.t_end >= current_time - 86400 * 3)
-                .collect();
-            let b = b
-                .heading_1(|h1| h1.id("title").text("Vælg en turnering"))
-                .heading_2(|h2| h2.text("Aktive turneringer"))
+        let mut b = Body::builder();
+
+        let active_tournaments = tournaments.iter().filter(|t| t.active);
+        let recently_ended_tournaments: Vec<&ShortTournament> = tournaments
+            .iter()
+            .filter(|t| t.active == false && t.t_end >= current_time - 86400 * 3)
+            .collect();
+        let b = b
+            .heading_1(|h1| h1.id("title").text("Vælg en turnering"))
+            .heading_2(|h2| h2.text("Aktive turneringer"))
+            .unordered_list(|ul| {
+                for tournament in active_tournaments {
+                    ul.list_item(|li| {
+                        li.anchor(|a| {
+                            a.text(format!("{}", tournament.tournament_name))
+                                .href(format!(
+                                    "?u={}&t={}",
+                                    params.query_args.user, tournament.tournament_id
+                                ))
+                        })
+                    });
+                }
+                ul
+            });
+        if recently_ended_tournaments.len() == 0 {
+            return Ok(b.build());
+        } else {
+            return Ok(b
+                .heading_2(|h2| h2.text("Afsluttede turneringer"))
                 .unordered_list(|ul| {
-                    for tournament in active_tournaments {
+                    for tournament in recently_ended_tournaments {
                         ul.list_item(|li| {
                             li.anchor(|a| {
                                 a.text(format!("{}", tournament.tournament_name))
@@ -98,38 +117,21 @@ impl Page {
                         });
                     }
                     ul
-                });
-            if recently_ended_tournaments.len() == 0 {
-                return b;
-            } else {
-                return b
-                    .heading_2(|h2| h2.text("Afsluttede turneringer"))
-                    .unordered_list(|ul| {
-                        for tournament in recently_ended_tournaments {
-                            ul.list_item(|li| {
-                                li.anchor(|a| {
-                                    a.text(format!("{}", tournament.tournament_name))
-                                        .href(format!(
-                                            "?u={}&t={}",
-                                            params.query_args.user, tournament.tournament_id
-                                        ))
-                                })
-                            });
-                        }
-                        ul
-                    });
-            }
-        }))
+                })
+                .build());
+        }
     }
 
-    fn select_hole_page(params: Params) -> Result<PageRenderer, Error> {
+    fn select_hole_page(params: Params) -> Result<Body, Error> {
         let tournament = fetch_tournament(
             &params.server,
             &params.query_args.user,
             &params.query_args.tournament.unwrap(),
         )?;
 
-        Ok(Box::new(move |b: &mut BodyBuilder| {
+        let mut b = Body::builder();
+
+        Ok(
             b.heading_1(|h1| h1.id("title").text(tournament.tournament_name))
                 .paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)))
                 .heading_2(|h2| h2.text("Vælg et hul"))
@@ -148,10 +150,11 @@ impl Page {
                     }
                     ul
                 })
-        }))
+                .build(),
+        )
     }
 
-    fn view_hole_page(params: Params) -> Result<PageRenderer, Error> {
+    fn view_hole_page(params: Params) -> Result<Body, Error> {
         let hole = fetch_hole(
             &params.server,
             &params.query_args.user,
@@ -159,46 +162,45 @@ impl Page {
             &params.query_args.hole.unwrap(),
         )?;
 
-        Ok(Box::new(move |b: &mut BodyBuilder| {
-            b.heading_1(|h1| h1.id("title").text(hole.hole_text))
-                .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
-                .table(|table| {
-                    table
-                        .table_head(|thead| {
-                            thead.table_row(|tr| {
-                                tr.table_header(|th| th.text("Nr.").scope("col"))
-                                    .table_header(|th| th.text("Navn").scope("col"))
-                                    .table_header(|th| th.text("Score").scope("col"))
-                            })
+        let mut b = Body::builder();
+
+        Ok(b.heading_1(|h1| h1.id("title").text(hole.hole_text))
+            .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
+            .table(|table| {
+                table
+                    .table_head(|thead| {
+                        thead.table_row(|tr| {
+                            tr.table_header(|th| th.text("Nr.").scope("col"))
+                                .table_header(|th| th.text("Navn").scope("col"))
+                                .table_header(|th| th.text("Score").scope("col"))
                         })
-                        .table_body(|tbody| {
-                            for score in hole.scores.iter().enumerate() {
-                                tbody.table_row(|tr| {
-                                    tr.table_cell(|td| td.text(format!("{}.", score.0 + 1)))
-                                        .table_cell(|td| td.text(score.1.player_name.clone()))
-                                        .table_cell(|td| {
-                                            td.text(format!("{}m", score.1.player_score))
-                                        })
-                                });
-                            }
-                            tbody
-                        });
-                    table
-                })
-                .anchor(|a| {
-                    a.href(format!(
-                        "/submit_score.html?u={}&t={}&h={}",
-                        params.query_args.user,
-                        params.query_args.tournament.unwrap(),
-                        hole.hole_number
-                    ))
-                    .text("Indsend notering")
-                })
-        }))
+                    })
+                    .table_body(|tbody| {
+                        for score in hole.scores.iter().enumerate() {
+                            tbody.table_row(|tr| {
+                                tr.table_cell(|td| td.text(format!("{}.", score.0 + 1)))
+                                    .table_cell(|td| td.text(score.1.player_name.clone()))
+                                    .table_cell(|td| td.text(format!("{}m", score.1.player_score)))
+                            });
+                        }
+                        tbody
+                    });
+                table
+            })
+            .anchor(|a| {
+                a.href(format!(
+                    "/submit_score.html?u={}&t={}&h={}",
+                    params.query_args.user,
+                    params.query_args.tournament.unwrap(),
+                    hole.hole_number
+                ))
+                .text("Indsend notering")
+            })
+            .build())
     }
 }
 
-fn insert_into_template(content: PageRenderer) -> Html {
+fn insert_into_template(content: Body) -> Html {
     Html::builder()
         .lang("da")
         .head(|head| {
@@ -211,7 +213,7 @@ fn insert_into_template(content: PageRenderer) -> Html {
                 .link(|link| link.rel("stylesheet").href("/user.css"))
                 .title_attr("Bullseyegolf light")
         })
-        .body(content)
+        .push(content)
         .build()
 }
 
@@ -273,7 +275,12 @@ pub struct Score {
     pub player_score: f64,
 }
 
-fn fetch_hole(server: &str, username: &str, tournament_id: &str, hole_number: &u8) -> Result<Hole, Error> {
+fn fetch_hole(
+    server: &str,
+    username: &str,
+    tournament_id: &str,
+    hole_number: &u8,
+) -> Result<Hole, Error> {
     let url = format!("https://{server}/{username}/{tournament_id}/{hole_number}");
     reqwest::blocking::get(url)
         .map_err(|_| Error::NetworkError)?
