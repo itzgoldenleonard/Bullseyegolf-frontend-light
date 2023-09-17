@@ -5,6 +5,10 @@ pub enum Error {
     EnvVarReadError(&'static str, std::env::VarError),
     InvalidQueryString,
     NetworkError, // TODO: Maybe this needs to be split up into multiple kinds of errors
+    GenericServerError(&'static str),
+    RefererError,
+    FormReadError(std::io::Error),
+    InvalidForm,
 }
 
 impl fmt::Display for Error {
@@ -22,6 +26,18 @@ impl fmt::Display for Error {
             }
             NetworkError => {
                 write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nBullseyegolf light kunne ikke kommunikere med API serveren")
+            }
+            GenericServerError(msg) => {
+                write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer skete en fejl på serveren, dette er en bug. Rapporter fejlen med URL'en til denne side og denne information\n<pre>{msg}</pre>")
+            }
+            RefererError => {
+                write!(f, "Status: 400\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer er et problem med din browsers referrer policy")
+            }
+            FormReadError(e) => {
+                write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer skete en fejl på serveren, dette er en bug. Rapporter fejlen med URL'en til denne side og denne information\n<pre>{e}</pre>")
+            }
+            InvalidForm => {
+                write!(f, "Status: 400\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDataen du har indsendt er ikke i det rigtige format")
             }
         }
     }

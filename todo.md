@@ -7,6 +7,8 @@
     - [X] Redirect
     - [ ] Make it unable to submit the same thing twice
 - [ ] Tests and error handling
+    - [ ] Explain errors well
+    - [ ] Elaborate on network errors
 - [ ] Styling
 - [ ] Check through with <https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Cross_browser_testing/Accessibility>
 

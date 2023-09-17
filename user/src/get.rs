@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn get() -> Result<String, Error> {
     let params: Params = Params::new()?;
     let page: Page = params.query_args.clone().into();
-    let content = page.find_page_function()(params);
+    let content = page.find_page_function()(params)?;
     Ok(insert_into_template(content).to_string())
 }
 
@@ -31,7 +31,8 @@ struct QueryParams {
 
 impl Params {
     pub fn new() -> Result<Self, Error> {
-        let query_string = env::var("QUERY_STRING").map_err(|e| Error::EnvVarReadError("QUERY_STRING", e))?;
+        let query_string =
+            env::var("QUERY_STRING").map_err(|e| Error::EnvVarReadError("QUERY_STRING", e))?;
         let query_args = qs::from_str(&query_string).map_err(|_| Error::InvalidQueryString)?;
         let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarReadError("SERVER_URL", e))?;
         Ok(Params { server, query_args })
@@ -60,7 +61,7 @@ impl From<QueryParams> for Page {
 type PageRenderer = Box<dyn for<'a> FnOnce(&'a mut BodyBuilder) -> &'a mut BodyBuilder>;
 
 impl Page {
-    pub fn find_page_function(self) -> fn(Params) -> PageRenderer {
+    pub fn find_page_function(self) -> fn(Params) -> Result<PageRenderer, Error> {
         match self {
             Self::SelectTournament => Self::select_tournament_page,
             Self::SelectHole => Self::select_hole_page,
@@ -68,15 +69,15 @@ impl Page {
         }
     }
 
-    fn select_tournament_page(params: Params) -> PageRenderer {
-        Box::new(move |b: &mut BodyBuilder| {
-            let tournaments =
-                fetch_short_tournaments(&params.server, &params.query_args.user);
+    fn select_tournament_page(params: Params) -> Result<PageRenderer, Error> {
+        let tournaments = fetch_short_tournaments(&params.server, &params.query_args.user)?;
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| Error::GenericServerError("Unable to calculate current time (time went backwards)"))?
+            .as_secs();
+
+        Ok(Box::new(move |b: &mut BodyBuilder| {
             let active_tournaments = tournaments.iter().filter(|t| t.active);
-            let current_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
             let recently_ended_tournaments: Vec<&ShortTournament> = tournaments
                 .iter()
                 .filter(|t| t.active == false && t.t_end >= current_time - 86400 * 3)
@@ -118,17 +119,17 @@ impl Page {
                         ul
                     });
             }
-        })
+        }))
     }
 
-    fn select_hole_page(params: Params) -> PageRenderer {
-        Box::new(move |b: &mut BodyBuilder| {
-            let tournament = fetch_tournament(
-                &params.server,
-                &params.query_args.user,
-                &params.query_args.tournament.unwrap(),
-            ).expect("I need to figure out how to propogate this error");
+    fn select_hole_page(params: Params) -> Result<PageRenderer, Error> {
+        let tournament = fetch_tournament(
+            &params.server,
+            &params.query_args.user,
+            &params.query_args.tournament.unwrap(),
+        )?;
 
+        Ok(Box::new(move |b: &mut BodyBuilder| {
             b.heading_1(|h1| h1.id("title").text(tournament.tournament_name))
                 .paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)))
                 .heading_2(|h2| h2.text("Vælg et hul"))
@@ -147,17 +148,18 @@ impl Page {
                     }
                     ul
                 })
-        })
+        }))
     }
 
-    fn view_hole_page(params: Params) -> PageRenderer {
-        Box::new(move |b: &mut BodyBuilder| {
-            let hole = fetch_hole(
-                &params.server,
-                &params.query_args.user,
-                params.query_args.tournament.as_ref().unwrap(),
-                &params.query_args.hole.unwrap(),
-            );
+    fn view_hole_page(params: Params) -> Result<PageRenderer, Error> {
+        let hole = fetch_hole(
+            &params.server,
+            &params.query_args.user,
+            params.query_args.tournament.as_ref().unwrap(),
+            &params.query_args.hole.unwrap(),
+        )?;
+
+        Ok(Box::new(move |b: &mut BodyBuilder| {
             b.heading_1(|h1| h1.id("title").text(hole.hole_text))
                 .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
                 .table(|table| {
@@ -192,7 +194,7 @@ impl Page {
                     ))
                     .text("Indsend notering")
                 })
-        })
+        }))
     }
 }
 
@@ -223,9 +225,12 @@ struct ShortTournament {
 }
 
 // TODO: Make this a fallible function
-fn fetch_short_tournaments(server: &str, username: &str) -> Vec<ShortTournament> {
+fn fetch_short_tournaments(server: &str, username: &str) -> Result<Vec<ShortTournament>, Error> {
     let url = format!("https://{server}/{username}");
-    reqwest::blocking::get(url).unwrap().json().unwrap()
+    reqwest::blocking::get(url)
+        .map_err(|_| Error::NetworkError)?
+        .json()
+        .map_err(|_| Error::NetworkError)
 }
 
 #[derive(Deserialize, Debug)]
@@ -236,8 +241,11 @@ struct Tournament {
     holes: Vec<Hole>,
 }
 
-// TODO: Make this a fallible function
-fn fetch_tournament(server: &str, username: &str, tournament_id: &str) -> Result<Tournament, Error> {
+fn fetch_tournament(
+    server: &str,
+    username: &str,
+    tournament_id: &str,
+) -> Result<Tournament, Error> {
     let url = format!("https://{server}/{username}/{tournament_id}");
     let client = reqwest::blocking::Client::new();
     client
@@ -265,7 +273,10 @@ pub struct Score {
     pub player_score: f64,
 }
 
-fn fetch_hole(server: &str, username: &str, tournament_id: &str, hole_number: &u8) -> Hole {
+fn fetch_hole(server: &str, username: &str, tournament_id: &str, hole_number: &u8) -> Result<Hole, Error> {
     let url = format!("https://{server}/{username}/{tournament_id}/{hole_number}");
-    reqwest::blocking::get(url).unwrap().json().unwrap()
+    reqwest::blocking::get(url)
+        .map_err(|_| Error::NetworkError)?
+        .json()
+        .map_err(|_| Error::NetworkError)
 }
