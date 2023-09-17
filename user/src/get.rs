@@ -8,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Main entrypoint for the user interface (not the submit endpoint)
 pub fn get() -> Result<String, Error> {
     let params: Params = Params::new()?;
-    let page: Page = params.query_args.clone().into();
-    let content = page.find_page_function()(params)?;
+    let page: Page = params.query_args.into();
+    let content = page.find_page_function(&params.server)?;
     Ok(insert_into_template(content).to_string())
 }
 
@@ -39,35 +39,35 @@ impl Params {
 }
 
 enum Page {
-    SelectTournament,
-    SelectHole,
-    ViewHole,
+    SelectTournament{user: String},
+    SelectHole{user: String, tournament: String},
+    ViewHole{user: String, tournament: String, hole: u8},
 }
 
 impl From<QueryParams> for Page {
     fn from(value: QueryParams) -> Self {
         use Page::*;
         match value.tournament {
-            None => SelectTournament,
-            Some(_) => match value.hole {
-                None => SelectHole,
-                Some(_) => ViewHole,
+            None => SelectTournament{user: value.user},
+            Some(tournament) => match value.hole {
+                None => SelectHole{user: value.user, tournament},
+                Some(hole) => ViewHole{user: value.user, tournament, hole},
             },
         }
     }
 }
 
 impl Page {
-    pub fn find_page_function(self) -> fn(Params) -> Result<Body, Error> {
+    pub fn find_page_function(self, server: &str) -> Result<Body, Error> {
         match self {
-            Self::SelectTournament => Self::select_tournament_page,
-            Self::SelectHole => Self::select_hole_page,
-            Self::ViewHole => Self::view_hole_page,
+            Self::SelectTournament{user} => Self::select_tournament_page(server, &user),
+            Self::SelectHole{user, tournament} => Self::select_hole_page(server, &user, &tournament),
+            Self::ViewHole{user, tournament, hole} => Self::view_hole_page(server, &user, &tournament, &hole),
         }
     }
 
-    fn select_tournament_page(params: Params) -> Result<Body, Error> {
-        let tournaments = fetch_short_tournaments(&params.server, &params.query_args.user)?;
+    fn select_tournament_page(server: &str, user: &str) -> Result<Body, Error> {
+        let tournaments = fetch_short_tournaments(server, user)?;
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| {
@@ -92,7 +92,7 @@ impl Page {
                             a.text(format!("{}", tournament.tournament_name))
                                 .href(format!(
                                     "?u={}&t={}",
-                                    params.query_args.user, tournament.tournament_id
+                                    user, tournament.tournament_id
                                 ))
                         })
                     });
@@ -111,7 +111,7 @@ impl Page {
                                 a.text(format!("{}", tournament.tournament_name))
                                     .href(format!(
                                         "?u={}&t={}",
-                                        params.query_args.user, tournament.tournament_id
+                                        user, tournament.tournament_id
                                     ))
                             })
                         });
@@ -122,11 +122,11 @@ impl Page {
         }
     }
 
-    fn select_hole_page(params: Params) -> Result<Body, Error> {
+    fn select_hole_page(server: &str, user: &str, tournament: &str) -> Result<Body, Error> {
         let tournament = fetch_tournament(
-            &params.server,
-            &params.query_args.user,
-            &params.query_args.tournament.unwrap(),
+            server,
+            user,
+            tournament,
         )?;
 
         let mut b = Body::builder();
@@ -141,7 +141,7 @@ impl Page {
                             li.anchor(|a| {
                                 a.text(format!("Hul {}", hole.hole_number)).href(format!(
                                     "?u={}&t={}&h={}",
-                                    params.query_args.user,
+                                    user,
                                     tournament.tournament_id,
                                     hole.hole_number
                                 ))
@@ -154,12 +154,12 @@ impl Page {
         )
     }
 
-    fn view_hole_page(params: Params) -> Result<Body, Error> {
+    fn view_hole_page(server: &str, user: &str, tournament: &str, hole: &u8) -> Result<Body, Error> {
         let hole = fetch_hole(
-            &params.server,
-            &params.query_args.user,
-            params.query_args.tournament.as_ref().unwrap(),
-            &params.query_args.hole.unwrap(),
+            server,
+            user,
+            tournament,
+            hole,
         )?;
 
         let mut b = Body::builder();
@@ -190,8 +190,8 @@ impl Page {
             .anchor(|a| {
                 a.href(format!(
                     "/submit_score.html?u={}&t={}&h={}",
-                    params.query_args.user,
-                    params.query_args.tournament.unwrap(),
+                    user,
+                    tournament,
                     hole.hole_number
                 ))
                 .text("Indsend notering")
@@ -226,7 +226,6 @@ struct ShortTournament {
     tournament_name: String,
 }
 
-// TODO: Make this a fallible function
 fn fetch_short_tournaments(server: &str, username: &str) -> Result<Vec<ShortTournament>, Error> {
     let url = format!("https://{server}/{username}");
     reqwest::blocking::get(url)
