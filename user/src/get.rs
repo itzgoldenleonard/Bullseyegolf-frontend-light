@@ -8,8 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Main entrypoint for the user interface (not the submit endpoint)
 pub fn get() -> Result<String, Error> {
     let params: Params = Params::new()?;
-    let page: Page = params.query_args.into();
-    let content = page.find_page_function(&params.server)?;
+    let content = params.try_into()?;
     Ok(insert_into_template(content).to_string())
 }
 
@@ -38,36 +37,37 @@ impl Params {
     }
 }
 
-enum Page {
-    SelectTournament{user: String},
-    SelectHole{user: String, tournament: String},
-    ViewHole{user: String, tournament: String, hole: u8},
-}
+impl TryFrom<Params> for Body {
+    type Error = Error;
 
-impl From<QueryParams> for Page {
-    fn from(value: QueryParams) -> Self {
-        use Page::*;
-        match value.tournament {
-            None => SelectTournament{user: value.user},
-            Some(tournament) => match value.hole {
-                None => SelectHole{user: value.user, tournament},
-                Some(hole) => ViewHole{user: value.user, tournament, hole},
+    fn try_from(value: Params) -> Result<Self, Self::Error> {
+        let user = value.query_args.user;
+        let tournament = value.query_args.tournament;
+        let hole = value.query_args.hole;
+        let server = value.server;
+
+        match tournament {
+            None => SelectTournamentPage { user }.render(&server),
+            Some(tournament) => match hole {
+                None => SelectHolePage { user, tournament }.render(&server),
+                Some(hole) => ViewHolePage {
+                    user,
+                    tournament,
+                    hole,
+                }
+                .render(&server),
             },
         }
     }
 }
 
-impl Page {
-    pub fn find_page_function(self, server: &str) -> Result<Body, Error> {
-        match self {
-            Self::SelectTournament{user} => Self::select_tournament_page(server, &user),
-            Self::SelectHole{user, tournament} => Self::select_hole_page(server, &user, &tournament),
-            Self::ViewHole{user, tournament, hole} => Self::view_hole_page(server, &user, &tournament, &hole),
-        }
-    }
+struct SelectTournamentPage {
+    user: String,
+}
 
-    fn select_tournament_page(server: &str, user: &str) -> Result<Body, Error> {
-        let tournaments = fetch_short_tournaments(server, user)?;
+impl Render for SelectTournamentPage {
+    fn render(&self, server: &str) -> Result<Body, Error> {
+        let tournaments = fetch_short_tournaments(server, &self.user)?;
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| {
@@ -90,10 +90,7 @@ impl Page {
                     ul.list_item(|li| {
                         li.anchor(|a| {
                             a.text(format!("{}", tournament.tournament_name))
-                                .href(format!(
-                                    "?u={}&t={}",
-                                    user, tournament.tournament_id
-                                ))
+                                .href(format!("?u={}&t={}", self.user, tournament.tournament_id))
                         })
                     });
                 }
@@ -111,7 +108,7 @@ impl Page {
                                 a.text(format!("{}", tournament.tournament_name))
                                     .href(format!(
                                         "?u={}&t={}",
-                                        user, tournament.tournament_id
+                                        self.user, tournament.tournament_id
                                     ))
                             })
                         });
@@ -121,13 +118,17 @@ impl Page {
                 .build());
         }
     }
+}
 
-    fn select_hole_page(server: &str, user: &str, tournament: &str) -> Result<Body, Error> {
-        let tournament = fetch_tournament(
-            server,
-            user,
-            tournament,
-        )?;
+
+struct SelectHolePage {
+    user: String,
+    tournament: String,
+}
+
+impl Render for SelectHolePage {
+    fn render(&self, server: &str) -> Result<Body, Error> {
+        let tournament = fetch_tournament(server, &self.user, &self.tournament)?;
 
         let mut b = Body::builder();
 
@@ -141,9 +142,7 @@ impl Page {
                             li.anchor(|a| {
                                 a.text(format!("Hul {}", hole.hole_number)).href(format!(
                                     "?u={}&t={}&h={}",
-                                    user,
-                                    tournament.tournament_id,
-                                    hole.hole_number
+                                    &self.user, tournament.tournament_id, hole.hole_number
                                 ))
                             })
                         });
@@ -153,14 +152,17 @@ impl Page {
                 .build(),
         )
     }
+}
 
-    fn view_hole_page(server: &str, user: &str, tournament: &str, hole: &u8) -> Result<Body, Error> {
-        let hole = fetch_hole(
-            server,
-            user,
-            tournament,
-            hole,
-        )?;
+struct ViewHolePage {
+    user: String,
+    tournament: String,
+    hole: u8,
+}
+
+impl Render for ViewHolePage {
+    fn render(&self, server: &str) -> Result<Body, Error> {
+        let hole = fetch_hole(server, &self.user, &self.tournament, &self.hole)?;
 
         let mut b = Body::builder();
 
@@ -190,9 +192,7 @@ impl Page {
             .anchor(|a| {
                 a.href(format!(
                     "/submit_score.html?u={}&t={}&h={}",
-                    user,
-                    tournament,
-                    hole.hole_number
+                    self.user, self.tournament, hole.hole_number
                 ))
                 .text("Indsend notering")
             })
@@ -200,27 +200,13 @@ impl Page {
     }
 }
 
-fn insert_into_template(content: Body) -> Html {
-    Html::builder()
-        .lang("da")
-        .head(|head| {
-            head.meta(|meta| meta.charset("utf-8"))
-                .meta(|meta| {
-                    meta.name("viewport")
-                        .content("width=device-width, initial-scale=1")
-                })
-                .meta(|meta| meta.name("color-scheme").content("light dark"))
-                .link(|link| link.rel("stylesheet").href("/user.css"))
-                .title_attr("Bullseyegolf light")
-        })
-        .push(content)
-        .build()
+trait Render {
+    fn render(&self, server: &str) -> Result<Body, Error>;
 }
 
 #[derive(Deserialize)]
 struct ShortTournament {
     active: bool,
-    //t_start: u64,
     t_end: u64,
     tournament_id: String,
     tournament_name: String,
@@ -285,4 +271,21 @@ fn fetch_hole(
         .map_err(|_| Error::NetworkError)?
         .json()
         .map_err(|_| Error::NetworkError)
+}
+
+fn insert_into_template(content: Body) -> Html {
+    Html::builder()
+        .lang("da")
+        .head(|head| {
+            head.meta(|meta| meta.charset("utf-8"))
+                .meta(|meta| {
+                    meta.name("viewport")
+                        .content("width=device-width, initial-scale=1")
+                })
+                .meta(|meta| meta.name("color-scheme").content("light dark"))
+                .link(|link| link.rel("stylesheet").href("/user.css"))
+                .title_attr("Bullseyegolf light")
+        })
+        .push(content)
+        .build()
 }
