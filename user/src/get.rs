@@ -1,5 +1,7 @@
 use crate::error::Error;
+use html::inline_text::Anchor;
 use html::root::{Body, Html};
+use html::text_content::UnorderedList;
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
 use std::env;
@@ -17,7 +19,7 @@ struct Params {
     query_args: QueryParams,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize)]
 struct QueryParams {
     #[serde(rename = "u")]
     user: String,
@@ -65,37 +67,45 @@ struct SelectTournamentPage {
     user: String,
 }
 
+fn secs_since_epoch() -> Result<u64, Error> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| {
+            Error::GenericServerError("Unable to calculate current time (time went backwards)")
+        })?
+        .as_secs())
+}
+
 impl Render for SelectTournamentPage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let tournaments: Vec<ShortTournament> = Fetch::fetch(server, self)?;
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| {
-                Error::GenericServerError("Unable to calculate current time (time went backwards)")
-            })?
-            .as_secs();
+        let current_time = secs_since_epoch()?;
 
-        let mut b = Body::builder();
+        //let (active, inactive) = tournaments.iter().partition(|t| t.active);
+        let active_tournaments = tournaments
+            .iter()
+            .filter(|t| t.active)
+            .map(|t| {
+                Anchor::builder()
+                    .text(format!("{}", t.tournament_name))
+                    .href(format!("?u={}&t={}", self.user, t.tournament_id))
+                    .build()
+            })
+            .fold(&mut UnorderedList::builder(), |acc, a| {
+                acc.list_item(|li| li.push(a))
+            })
+            .build();
 
-        let active_tournaments = tournaments.iter().filter(|t| t.active);
         let recently_ended_tournaments: Vec<&ShortTournament> = tournaments
             .iter()
             .filter(|t| t.active == false && t.t_end >= current_time - 86400 * 3)
             .collect();
+
+        let mut b = Body::builder();
         let b = b
             .heading_1(|h1| h1.id("title").text("Vælg en turnering"))
             .heading_2(|h2| h2.text("Aktive turneringer"))
-            .unordered_list(|ul| {
-                for tournament in active_tournaments {
-                    ul.list_item(|li| {
-                        li.anchor(|a| {
-                            a.text(format!("{}", tournament.tournament_name))
-                                .href(format!("?u={}&t={}", self.user, tournament.tournament_id))
-                        })
-                    });
-                }
-                ul
-            });
+            .push(active_tournaments);
         if recently_ended_tournaments.len() == 0 {
             return Ok(b.build());
         } else {
@@ -219,7 +229,7 @@ impl Fetch for Vec<ShortTournament> {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct Tournament {
     tournament_id: String,
     tournament_name: String,
@@ -243,7 +253,7 @@ impl Fetch for Tournament {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct Hole {
     hole_number: u8,
     hole_text: String,
@@ -251,7 +261,7 @@ struct Hole {
     scores: Vec<Score>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize)]
 pub struct Score {
     pub player_name: String,
     pub player_score: f64,
@@ -297,4 +307,3 @@ trait Fetch: Sized {
     type Page;
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error>;
 }
-

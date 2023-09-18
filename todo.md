@@ -1,6 +1,10 @@
 # Get
 ## General
 - [ ] Make each page
+    - [ ] Select tournament page
+    - [ ] Select hole page
+    - [ ] View hole page
+    - [X] Submit score page
 - [-] Make submit functionality
     - [X] Seperate the 2 types of score encodings
     - [X] Convert between the 2
@@ -16,6 +20,7 @@
 
 ## Select tournament page
 - [X] Support for inactive but recently ended tournaments
+    - [ ] Fix bugs
 - [ ] No tournaments
 - [ ] If fields are empty
 
@@ -24,11 +29,7 @@
 - [ ] If fields are empty
 
 ## View hole page
-- [ ] Support for inactive but recently ended tournaments
 - [ ] No scores yet
 - [ ] If fields are empty
-- [ ] Perhaps localize the numbers
-
-## Submit score page
-- [X] It might be possible to make this an entirely static thing
-
+- [ ] Localize the numbers
+- [ ] Support for inactive but recently ended tournaments
