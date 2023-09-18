@@ -2,12 +2,12 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
-    EnvVarReadError(&'static str, std::env::VarError),
+    EnvVarRead(&'static str, std::env::VarError),
     InvalidQueryString,
-    NetworkError, // TODO: Maybe this needs to be split up into multiple kinds of errors
-    GenericServerError(&'static str),
-    RefererError,
-    FormReadError(std::io::Error),
+    Network, // TODO: Maybe this needs to be split up into multiple kinds of errors
+    GenericServer(&'static str),
+    Referer,
+    FormRead(std::io::Error),
     InvalidForm,
 }
 
@@ -18,22 +18,22 @@ impl fmt::Display for Error {
         // TODO: Indicate danish language in the content-type header
         // TODO: Use appropriate error codes
         match self {
-            EnvVarReadError(var_name, e) => {
+            EnvVarRead(var_name, e) => {
                 write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer skete en fejl på serveren, dette er en bug. Rapporter fejlen med URL'en til denne side og denne information\n<pre>{var_name}: {e}</pre>")
             }
             InvalidQueryString => {
                 write!(f, "Status: 400\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer er en fejl i URL'en. Tjek at du har stavet den rigtigt og at du har fået det rigtige link. <br/> URL'en burde ende med: <pre>....org/u?u=brugernavn</pre>")
             }
-            NetworkError => {
+            Network => {
                 write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nBullseyegolf light kunne ikke kommunikere med API serveren")
             }
-            GenericServerError(msg) => {
+            GenericServer(msg) => {
                 write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer skete en fejl på serveren, dette er en bug. Rapporter fejlen med URL'en til denne side og denne information\n<pre>{msg}</pre>")
             }
-            RefererError => {
+            Referer => {
                 write!(f, "Status: 400\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer er et problem med din browsers referrer policy")
             }
-            FormReadError(e) => {
+            FormRead(e) => {
                 write!(f, "Status: 500\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\r\nDer skete en fejl på serveren, dette er en bug. Rapporter fejlen med URL'en til denne side og denne information\n<pre>{e}</pre>")
             }
             InvalidForm => {

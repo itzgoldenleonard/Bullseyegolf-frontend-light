@@ -1,7 +1,7 @@
 # Get
 ## General
 - [ ] Make each page
-    - [ ] Select tournament page
+    - [X] Select tournament page
     - [ ] Select hole page
     - [ ] View hole page
     - [X] Submit score page
@@ -17,12 +17,6 @@
 - [ ] Check through with <https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Cross_browser_testing/Accessibility>
 
 ## Select user (possibly)
-
-## Select tournament page
-- [X] Support for inactive but recently ended tournaments
-    - [ ] Fix bugs
-- [ ] No tournaments
-- [ ] If fields are empty
 
 ## Select hole page
 - [ ] No holes in tournament

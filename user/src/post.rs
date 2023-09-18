@@ -10,7 +10,7 @@ pub fn post() -> Result<String, Error> {
     let params = Params::new()?;
 
     let mut score_buffer = String::new();
-    let _ = stdin().read_line(&mut score_buffer).map_err(|e| Error::FormReadError(e))?;
+    let _ = stdin().read_line(&mut score_buffer).map_err(Error::FormRead)?;
     let score: CustomScore = qs::from_str(&score_buffer).map_err(|_| Error::InvalidForm)?; // TODO: Try with from_reader
     submit_score(&params, score.into())?;
     Ok(format!(
@@ -36,13 +36,13 @@ struct QueryParams {
 
 impl Params {
     pub fn new() -> Result<Self, Error> {
-        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarReadError("SERVER_URL", e))?;
-        let query_string = env::var("HTTP_REFERER").map_err(|_| Error::RefererError)?;
-        let query_string = match query_string.split_once("?") {
+        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarRead("SERVER_URL", e))?;
+        let query_string = env::var("HTTP_REFERER").map_err(|_| Error::Referer)?;
+        let query_string = match query_string.split_once('?') {
             Some(v) => v.1,
-            None => return Err(Error::RefererError),
+            None => return Err(Error::Referer),
         };
-        let query_args = qs::from_str(&query_string).map_err(|_| Error::InvalidQueryString)?;
+        let query_args = qs::from_str(query_string).map_err(|_| Error::InvalidQueryString)?;
         Ok(Params { server, query_args })
     }
 }
@@ -80,5 +80,5 @@ fn submit_score(params: &Params, score: Score) -> Result<reqwest::blocking::Resp
         params.server, params.query_args.user, params.query_args.tournament, params.query_args.hole
     );
     let client = reqwest::blocking::Client::new();
-    client.post(url).json(&score).send().map_err(|_| Error::NetworkError)
+    client.post(url).json(&score).send().map_err(|_| Error::Network)
 }

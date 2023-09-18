@@ -1,11 +1,13 @@
 use crate::error::Error;
 use html::inline_text::Anchor;
+use html::root::children::BodyChild;
 use html::root::{Body, Html};
-use html::text_content::UnorderedList;
+use html::text_content::{Paragraph, UnorderedList};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tuple::Map;
 
 /// Main entrypoint for the user interface (not the submit endpoint)
 pub fn get() -> Result<String, Error> {
@@ -32,9 +34,9 @@ struct QueryParams {
 impl Params {
     pub fn new() -> Result<Self, Error> {
         let query_string =
-            env::var("QUERY_STRING").map_err(|e| Error::EnvVarReadError("QUERY_STRING", e))?;
+            env::var("QUERY_STRING").map_err(|e| Error::EnvVarRead("QUERY_STRING", e))?;
         let query_args = qs::from_str(&query_string).map_err(|_| Error::InvalidQueryString)?;
-        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarReadError("SERVER_URL", e))?;
+        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarRead("SERVER_URL", e))?;
         Ok(Params { server, query_args })
     }
 }
@@ -67,67 +69,61 @@ struct SelectTournamentPage {
     user: String,
 }
 
-fn secs_since_epoch() -> Result<u64, Error> {
-    Ok(SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| {
-            Error::GenericServerError("Unable to calculate current time (time went backwards)")
-        })?
-        .as_secs())
-}
-
 impl Render for SelectTournamentPage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let tournaments: Vec<ShortTournament> = Fetch::fetch(server, self)?;
         let current_time = secs_since_epoch()?;
 
-        //let (active, inactive) = tournaments.iter().partition(|t| t.active);
-        let active_tournaments = tournaments
-            .iter()
-            .filter(|t| t.active)
-            .map(|t| {
-                Anchor::builder()
-                    .text(format!("{}", t.tournament_name))
-                    .href(format!("?u={}&t={}", self.user, t.tournament_id))
-                    .build()
-            })
-            .fold(&mut UnorderedList::builder(), |acc, a| {
-                acc.list_item(|li| li.push(a))
-            })
-            .build();
+        let create_ul = |c: Vec<ShortTournament>| {
+            c.iter()
+                .map(|t| {
+                    Anchor::builder()
+                        .text(t.tournament_name.to_string())
+                        .href(format!("?u={}&t={}", self.user, t.tournament_id))
+                        .build()
+                })
+                .fold(&mut UnorderedList::builder(), |acc, a| {
+                    acc.list_item(|li| li.push(a))
+                })
+                .build()
+        };
 
-        let recently_ended_tournaments: Vec<&ShortTournament> = tournaments
-            .iter()
-            .filter(|t| t.active == false && t.t_end >= current_time - 86400 * 3)
-            .collect();
+        let (active, inactive) = tournaments
+            .into_iter()
+            .filter(|t| t.t_end >= current_time - 86400 * 3 && t.t_start < current_time)
+            .partition(|t| t.active)
+            .map(create_ul);
 
         let mut b = Body::builder();
         let b = b
             .heading_1(|h1| h1.id("title").text("Vælg en turnering"))
             .heading_2(|h2| h2.text("Aktive turneringer"))
-            .push(active_tournaments);
-        if recently_ended_tournaments.len() == 0 {
-            return Ok(b.build());
-        } else {
-            return Ok(b
-                .heading_2(|h2| h2.text("Afsluttede turneringer"))
-                .unordered_list(|ul| {
-                    for tournament in recently_ended_tournaments {
-                        ul.list_item(|li| {
-                            li.anchor(|a| {
-                                a.text(format!("{}", tournament.tournament_name))
-                                    .href(format!(
-                                        "?u={}&t={}",
-                                        self.user, tournament.tournament_id
-                                    ))
-                            })
-                        });
-                    }
-                    ul
-                })
-                .build());
-        }
+            .push(if !active.children().is_empty() {
+                BodyChild::UnorderedList(active)
+            } else {
+                BodyChild::Paragraph(
+                    Paragraph::builder()
+                        .text("Ingen aktive turneringer")
+                        .build(),
+                )
+            });
+
+        if !inactive.children().is_empty() {
+            b.heading_2(|h2| h2.text("Afsluttede turneringer"))
+                .push(inactive);
+        };
+
+        return Ok(b.build());
     }
+}
+
+fn secs_since_epoch() -> Result<u64, Error> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| {
+            Error::GenericServer("Unable to calculate current time (time went backwards)")
+        })?
+        .as_secs())
 }
 
 struct SelectHolePage {
@@ -212,6 +208,7 @@ impl Render for ViewHolePage {
 #[derive(Deserialize)]
 struct ShortTournament {
     active: bool,
+    t_start: u64,
     t_end: u64,
     tournament_id: String,
     tournament_name: String,
@@ -223,9 +220,9 @@ impl Fetch for Vec<ShortTournament> {
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
         let url = format!("https://{}/{}", server, page.user);
         reqwest::blocking::get(url)
-            .map_err(|_| Error::NetworkError)?
+            .map_err(|_| Error::Network)?
             .json()
-            .map_err(|_| Error::NetworkError)
+            .map_err(|_| Error::Network)
     }
 }
 
@@ -247,9 +244,9 @@ impl Fetch for Tournament {
             .get(url)
             .header("No-Hole-Images", "true")
             .send()
-            .map_err(|_| Error::NetworkError)?
+            .map_err(|_| Error::Network)?
             .json()
-            .map_err(|_| Error::NetworkError)
+            .map_err(|_| Error::Network)
     }
 }
 
@@ -276,9 +273,9 @@ impl Fetch for Hole {
             page.user, page.tournament, page.hole
         );
         reqwest::blocking::get(url)
-            .map_err(|_| Error::NetworkError)?
+            .map_err(|_| Error::Network)?
             .json()
-            .map_err(|_| Error::NetworkError)
+            .map_err(|_| Error::Network)
     }
 }
 
