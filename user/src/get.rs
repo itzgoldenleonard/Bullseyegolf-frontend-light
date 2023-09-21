@@ -86,7 +86,7 @@ impl Render for SelectTournamentPage {
                     acc.list_item(|li| li.push(a))
                 })
                 .build()
-        };
+        }; // TODO: This might make sense as a trait
 
         let (active, inactive) = tournaments
             .into_iter()
@@ -95,8 +95,7 @@ impl Render for SelectTournamentPage {
             .map(create_ul);
 
         let mut b = Body::builder();
-        let b = b
-            .heading_1(|h1| h1.id("title").text("Vælg en turnering"))
+        b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
             .heading_2(|h2| h2.text("Aktive turneringer"))
             .push(if !active.children().is_empty() {
                 BodyChild::UnorderedList(active)
@@ -113,7 +112,7 @@ impl Render for SelectTournamentPage {
                 .push(inactive);
         };
 
-        return Ok(b.build());
+        Ok(b.build())
     }
 }
 
@@ -134,28 +133,42 @@ struct SelectHolePage {
 impl Render for SelectHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let tournament = Tournament::fetch(server, self)?;
+        let holes = tournament
+            .holes
+            .iter()
+            .map(|h| {
+                Anchor::builder()
+                    .text(format!("Hul {}", h.hole_number))
+                    .href(format!(
+                        "?u={}&t={}&h={}",
+                        self.user, self.tournament, h.hole_number
+                    ))
+                    .build()
+            })
+            .fold(&mut UnorderedList::builder(), |acc, a| {
+                acc.list_item(|li| li.push(a))
+            })
+            .build();
 
         let mut b = Body::builder();
+        b.heading_1(|h1| h1.id("title").text(tournament.tournament_name));
 
-        Ok(
-            b.heading_1(|h1| h1.id("title").text(tournament.tournament_name))
-                .paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)))
-                .heading_2(|h2| h2.text("Vælg et hul"))
-                .unordered_list(|ul| {
-                    for hole in tournament.holes {
-                        ul.list_item(|li| {
-                            li.anchor(|a| {
-                                a.text(format!("Hul {}", hole.hole_number)).href(format!(
-                                    "?u={}&t={}&h={}",
-                                    &self.user, tournament.tournament_id, hole.hole_number
-                                ))
-                            })
-                        });
-                    }
-                    ul
-                })
-                .build(),
-        )
+        if !tournament.tournament_sponsor.is_empty() {
+            b.paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)));
+        };
+
+        b.heading_2(|h2| h2.text("Vælg et hul"))
+            .push(if !holes.children().is_empty() {
+                BodyChild::UnorderedList(holes)
+            } else {
+                BodyChild::Paragraph(
+                    Paragraph::builder()
+                        .text("Der er ingen huller i denne turnering")
+                        .build(),
+                )
+            });
+
+        Ok(b.build())
     }
 }
 
@@ -230,8 +243,8 @@ impl Fetch for Vec<ShortTournament> {
 struct Tournament {
     tournament_id: String,
     tournament_name: String,
-    tournament_sponsor: String,
-    holes: Vec<Hole>,
+    tournament_sponsor: String, // Optional
+    holes: Vec<Hole>,           // Optional
 }
 
 impl Fetch for Tournament {

@@ -2,7 +2,7 @@
 ## General
 - [ ] Make each page
     - [X] Select tournament page
-    - [ ] Select hole page
+    - [X] Select hole page
     - [ ] View hole page
     - [X] Submit score page
 - [-] Make submit functionality
@@ -17,10 +17,6 @@
 - [ ] Check through with <https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Cross_browser_testing/Accessibility>
 
 ## Select user (possibly)
-
-## Select hole page
-- [ ] No holes in tournament
-- [ ] If fields are empty
 
 ## View hole page
 - [ ] No scores yet
