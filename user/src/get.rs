@@ -2,6 +2,7 @@ use crate::error::Error;
 use html::inline_text::Anchor;
 use html::root::children::BodyChild;
 use html::root::{Body, Html};
+use html::tables::{TableBody, TableRow};
 use html::text_content::{Paragraph, UnorderedList};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
@@ -181,40 +182,81 @@ struct ViewHolePage {
 impl Render for ViewHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let hole = Hole::fetch(server, self)?;
+        let hole_text = if !hole.hole_text.is_empty() {
+            hole.hole_text
+        } else {
+            format!("Hul {}", hole.hole_number)
+        };
+        let no_scores = hole.scores.is_empty();
+        let scores = hole.scores.into_iter().enumerate().map(|s| {
+            TableRow::builder()
+                .table_cell(|td| td.text(format!("{}.", s.0 + 1)))
+                .table_cell(|td| td.text(s.1.player_name.clone()))
+                .table_cell(|td| {
+                    td.text(format!("{:.2}m", s.1.player_score,).replacen(".", ",", 1))
+                })
+                .build()
+        });
+
+        let mut scores_builder = TableBody::builder();
+        if no_scores {
+            scores_builder.table_row(|tr| {
+                tr.table_cell(|td| td.text("Der er ingen noteringer endnu").colspan("3"))
+            });
+        } else {
+            scores_builder.extend(scores);
+        };
 
         let mut b = Body::builder();
+        b.heading_1(|h1| h1.id("title").text(hole_text));
 
-        Ok(b.heading_1(|h1| h1.id("title").text(hole.hole_text))
-            .paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)))
-            .table(|table| {
-                table
-                    .table_head(|thead| {
-                        thead.table_row(|tr| {
-                            tr.table_header(|th| th.text("Nr.").scope("col"))
-                                .table_header(|th| th.text("Navn").scope("col"))
-                                .table_header(|th| th.text("Score").scope("col"))
-                        })
+        if !hole.hole_sponsor.is_empty() {
+            b.paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)));
+        };
+
+        b.table(|table| {
+            table
+                .table_head(|thead| {
+                    thead.table_row(|tr| {
+                        tr.table_header(|th| th.text("Nr.").scope("col"))
+                            .table_header(|th| th.text("Navn").scope("col"))
+                            .table_header(|th| th.text("Score").scope("col"))
                     })
-                    .table_body(|tbody| {
-                        for score in hole.scores.iter().enumerate() {
-                            tbody.table_row(|tr| {
-                                tr.table_cell(|td| td.text(format!("{}.", score.0 + 1)))
-                                    .table_cell(|td| td.text(score.1.player_name.clone()))
-                                    .table_cell(|td| td.text(format!("{}m", score.1.player_score)))
-                            });
-                        }
-                        tbody
-                    });
-                table
-            })
-            .anchor(|a| {
+                })
+                .push(scores_builder.build());
+            table
+        });
+
+        if self.active(server)? {
+            b.anchor(|a| {
                 a.href(format!(
                     "/submit_score.html?u={}&t={}&h={}",
                     self.user, self.tournament, hole.hole_number
                 ))
                 .text("Indsend notering")
-            })
-            .build())
+            });
+        };
+
+        Ok(b.build())
+    }
+}
+
+impl From<&ViewHolePage> for SelectTournamentPage {
+    fn from(value: &ViewHolePage) -> Self {
+        Self {
+            user: value.user.clone(),
+        }
+    }
+}
+
+impl ViewHolePage {
+    fn active(&self, server: &str) -> Result<bool, Error> {
+        let tournament_list: Vec<ShortTournament> = Fetch::fetch(server, &self.into())?;
+        Ok(tournament_list
+            .into_iter()
+            .find(|t| t.tournament_id == self.tournament)
+            .map(|t| t.active)
+            .unwrap_or(false))
     }
 }
 
@@ -241,7 +283,7 @@ impl Fetch for Vec<ShortTournament> {
 
 #[derive(Deserialize)]
 struct Tournament {
-    tournament_id: String,
+    //tournament_id: String,
     tournament_name: String,
     tournament_sponsor: String, // Optional
     holes: Vec<Hole>,           // Optional
@@ -266,9 +308,9 @@ impl Fetch for Tournament {
 #[derive(Deserialize)]
 struct Hole {
     hole_number: u8,
-    hole_text: String,
-    hole_sponsor: String,
-    scores: Vec<Score>,
+    hole_text: String,    // Optional
+    hole_sponsor: String, // Optional
+    scores: Vec<Score>,   // Optional
 }
 
 #[derive(Deserialize, Serialize)]
