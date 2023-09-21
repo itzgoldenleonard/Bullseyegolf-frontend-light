@@ -1,9 +1,8 @@
 use crate::error::Error;
-use html::inline_text::Anchor;
 use html::root::children::BodyChild;
 use html::root::{Body, Html};
 use html::tables::{TableBody, TableRow};
-use html::text_content::{Paragraph, UnorderedList};
+use html::text_content::{ListItem, Paragraph, UnorderedList};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
 use std::env;
@@ -70,30 +69,31 @@ struct SelectTournamentPage {
     user: String,
 }
 
+impl ToHtml<ListItem, SelectTournamentPage> for ShortTournament {
+    fn to_html(&self, page: &SelectTournamentPage) -> ListItem {
+        ListItem::builder()
+            .anchor(|a| {
+                a.text(self.tournament_name.to_string())
+                    .href(format!("?u={}&t={}", page.user, self.tournament_id))
+            })
+            .build()
+    }
+}
+
 impl Render for SelectTournamentPage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let tournaments: Vec<ShortTournament> = Fetch::fetch(server, self)?;
         let current_time = secs_since_epoch()?;
 
-        let create_ul = |c: Vec<ShortTournament>| {
-            c.iter()
-                .map(|t| {
-                    Anchor::builder()
-                        .text(t.tournament_name.to_string())
-                        .href(format!("?u={}&t={}", self.user, t.tournament_id))
-                        .build()
-                })
-                .fold(&mut UnorderedList::builder(), |acc, a| {
-                    acc.list_item(|li| li.push(a))
-                })
-                .build()
-        }; // TODO: This might make sense as a trait
-
         let (active, inactive) = tournaments
             .into_iter()
             .filter(|t| t.t_end >= current_time - 86400 * 3 && t.t_start < current_time)
             .partition(|t| t.active)
-            .map(create_ul);
+            .map(|vec: Vec<ShortTournament>| {
+                UnorderedList::builder()
+                    .extend(vec.iter().map(|t| t.to_html(self)))
+                    .build()
+            });
 
         let mut b = Body::builder();
         b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
@@ -131,25 +131,24 @@ struct SelectHolePage {
     tournament: String,
 }
 
+impl ToHtml<ListItem, SelectHolePage> for Hole {
+    fn to_html(&self, page: &SelectHolePage) -> ListItem {
+        ListItem::builder()
+            .anchor(|a| {
+                a.text(format!("Hul {}", self.hole_number)).href(format!(
+                    "?u={}&t={}&h={}",
+                    page.user, page.tournament, self.hole_number
+                ))
+            })
+            .build()
+    }
+}
+
 impl Render for SelectHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let tournament = Tournament::fetch(server, self)?;
-        let holes = tournament
-            .holes
-            .iter()
-            .map(|h| {
-                Anchor::builder()
-                    .text(format!("Hul {}", h.hole_number))
-                    .href(format!(
-                        "?u={}&t={}&h={}",
-                        self.user, self.tournament, h.hole_number
-                    ))
-                    .build()
-            })
-            .fold(&mut UnorderedList::builder(), |acc, a| {
-                acc.list_item(|li| li.push(a))
-            })
-            .build();
+        let holes = tournament.holes.iter().map(|h| h.to_html(self));
+        let holes = UnorderedList::builder().extend(holes).build();
 
         let mut b = Body::builder();
         b.heading_1(|h1| h1.id("title").text(tournament.tournament_name));
@@ -179,6 +178,16 @@ struct ViewHolePage {
     hole: u8,
 }
 
+impl ToHtml<TableRow, ()> for (usize, Score) {
+    fn to_html(&self, _: &()) -> TableRow {
+        TableRow::builder()
+            .table_cell(|td| td.text(format!("{}.", self.0 + 1)))
+            .table_cell(|td| td.text(self.1.player_name.clone()))
+            .table_cell(|td| td.text(format!("{:.2}m", self.1.player_score,).replacen('.', ",", 1)))
+            .build()
+    }
+}
+
 impl Render for ViewHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
         let hole = Hole::fetch(server, self)?;
@@ -187,25 +196,10 @@ impl Render for ViewHolePage {
         } else {
             format!("Hul {}", hole.hole_number)
         };
-        let no_scores = hole.scores.is_empty();
-        let scores = hole.scores.into_iter().enumerate().map(|s| {
-            TableRow::builder()
-                .table_cell(|td| td.text(format!("{}.", s.0 + 1)))
-                .table_cell(|td| td.text(s.1.player_name.clone()))
-                .table_cell(|td| {
-                    td.text(format!("{:.2}m", s.1.player_score,).replacen(".", ",", 1))
-                })
-                .build()
-        });
 
-        let mut scores_builder = TableBody::builder();
-        if no_scores {
-            scores_builder.table_row(|tr| {
-                tr.table_cell(|td| td.text("Der er ingen noteringer endnu").colspan("3"))
-            });
-        } else {
-            scores_builder.extend(scores);
-        };
+        let no_scores = hole.scores.is_empty();
+        let scores = hole.scores.into_iter().enumerate().map(|s| s.to_html(&()));
+        let scores = TableBody::builder().extend(scores).build();
 
         let mut b = Body::builder();
         b.heading_1(|h1| h1.id("title").text(hole_text));
@@ -223,7 +217,17 @@ impl Render for ViewHolePage {
                             .table_header(|th| th.text("Score").scope("col"))
                     })
                 })
-                .push(scores_builder.build());
+                .push(if no_scores {
+                    TableBody::builder()
+                        .table_row(|tr| {
+                            tr.table_cell(|td| {
+                                td.text("Der er ingen noteringer endnu").colspan("3")
+                            })
+                        })
+                        .build()
+                } else {
+                    scores
+                });
             table
         });
 
@@ -358,4 +362,8 @@ trait Render {
 trait Fetch: Sized {
     type Page;
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error>;
+}
+
+trait ToHtml<T, P> {
+    fn to_html(&self, page: &P) -> T;
 }
