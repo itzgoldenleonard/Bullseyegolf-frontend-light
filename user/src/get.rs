@@ -1,6 +1,5 @@
 use crate::error::Error;
 use html::inline_text::Anchor;
-use html::root::children::BodyChild;
 use html::root::{Body, Html};
 use html::tables::{TableBody, TableHead, TableHeader, TableRow};
 use html::text_content::{ListItem, Paragraph, UnorderedList};
@@ -83,8 +82,16 @@ impl ToHtml<ListItem, SelectTournamentPage> for ShortTournament {
 
 impl Render for SelectTournamentPage {
     fn render(&self, server: &str) -> Result<Body, Error> {
+        // The obligatory builder
+        let mut b = Body::builder();
+
+        // Fetch data
         let tournaments: Vec<ShortTournament> = Fetch::fetch(server, self)?;
         let current_time = secs_since_epoch()?;
+
+        // Create and append elements to body
+        b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
+            .heading_2(|h2| h2.text("Aktive turneringer"));
 
         let (active, inactive) = tournaments
             .into_iter()
@@ -95,25 +102,19 @@ impl Render for SelectTournamentPage {
                     .extend(vec.iter().map(|t| t.to_html(self)))
                     .build()
             });
-
-        let mut b = Body::builder();
-        b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
-            .heading_2(|h2| h2.text("Aktive turneringer"))
-            .push(if !active.children().is_empty() {
-                BodyChild::UnorderedList(active)
-            } else {
-                BodyChild::Paragraph(
-                    Paragraph::builder()
-                        .text("Ingen aktive turneringer")
-                        .build(),
-                )
-            });
+        let no_active_tournaments = active.children().is_empty().then(|| {
+            Paragraph::builder()
+                .text("Ingen aktive turneringer")
+                .build()
+        });
+        b.push(active).extend(no_active_tournaments);
 
         if !inactive.children().is_empty() {
             b.heading_2(|h2| h2.text("Afsluttede turneringer"))
                 .push(inactive);
         };
 
+        // Return
         Ok(b.build())
     }
 }
@@ -147,27 +148,26 @@ impl ToHtml<ListItem, SelectHolePage> for Hole {
 
 impl Render for SelectHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
-        let tournament = Tournament::fetch(server, self)?;
-        let holes = tournament.holes.iter().map(|h| h.to_html(self));
-        let holes = UnorderedList::builder().extend(holes).build();
-
         let mut b = Body::builder();
+
+        let tournament = Tournament::fetch(server, self)?;
+
         b.heading_1(|h1| h1.id("title").text(tournament.tournament_name));
 
         if !tournament.tournament_sponsor.is_empty() {
             b.paragraph(|p| p.text(format!("Sponsoreret af: {}", tournament.tournament_sponsor)));
         };
 
-        b.heading_2(|h2| h2.text("Vælg et hul"))
-            .push(if !holes.children().is_empty() {
-                BodyChild::UnorderedList(holes)
-            } else {
-                BodyChild::Paragraph(
-                    Paragraph::builder()
-                        .text("Der er ingen huller i denne turnering")
-                        .build(),
-                )
-            });
+        b.heading_2(|h2| h2.text("Vælg et hul"));
+
+        let no_holes = tournament.holes.is_empty().then(|| {
+            Paragraph::builder()
+                .text("Der er ingen huller i denne turnering")
+                .build()
+        });
+        let holes = tournament.holes.into_iter().map(|h| h.to_html(self));
+        let holes = UnorderedList::builder().extend(holes).build();
+        b.push(holes).extend(no_holes);
 
         Ok(b.build())
     }
@@ -191,13 +191,10 @@ impl ToHtml<TableRow, ()> for (usize, Score) {
 
 impl Render for ViewHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
-        // The obligatory builder
         let mut b = Body::builder();
 
-        // Fetch data
         let hole = Hole::fetch(server, self)?;
 
-        // Create and append elements to body
         let title = hole
             .hole_text
             .is_empty()
@@ -226,7 +223,7 @@ impl Render for ViewHolePage {
             .build();
         b.table(|table| table.push(thead).push(tbody));
 
-        let submit = self.active(server)?.then(|| {
+        let submit = self.active(server).map(|_| {
             let href = format!(
                 "/submit_score.html?u={}&t={}&h={}",
                 self.user, self.tournament, hole.hole_number
@@ -238,7 +235,6 @@ impl Render for ViewHolePage {
         });
         b.extend(submit);
 
-        // Return
         Ok(b.build())
     }
 }
