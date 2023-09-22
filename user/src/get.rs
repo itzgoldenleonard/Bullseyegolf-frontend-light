@@ -1,7 +1,8 @@
 use crate::error::Error;
+use html::inline_text::Anchor;
 use html::root::children::BodyChild;
 use html::root::{Body, Html};
-use html::tables::{TableBody, TableRow};
+use html::tables::{TableBody, TableHead, TableHeader, TableRow};
 use html::text_content::{ListItem, Paragraph, UnorderedList};
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
@@ -190,57 +191,54 @@ impl ToHtml<TableRow, ()> for (usize, Score) {
 
 impl Render for ViewHolePage {
     fn render(&self, server: &str) -> Result<Body, Error> {
-        let hole = Hole::fetch(server, self)?;
-        let hole_text = if !hole.hole_text.is_empty() {
-            hole.hole_text
-        } else {
-            format!("Hul {}", hole.hole_number)
-        };
-
-        let no_scores = hole.scores.is_empty();
-        let scores = hole.scores.into_iter().enumerate().map(|s| s.to_html(&()));
-        let scores = TableBody::builder().extend(scores).build();
-
+        // The obligatory builder
         let mut b = Body::builder();
-        b.heading_1(|h1| h1.id("title").text(hole_text));
+
+        // Fetch data
+        let hole = Hole::fetch(server, self)?;
+
+        // Create and append elements to body
+        let title = hole
+            .hole_text
+            .is_empty()
+            .then(|| format!("Hul {}", hole.hole_number))
+            .unwrap_or(hole.hole_text);
+        b.heading_1(|h1| h1.id("title").text(title));
 
         if !hole.hole_sponsor.is_empty() {
             b.paragraph(|p| p.text(format!("Sponsoreret af: {}", hole.hole_sponsor)));
         };
 
-        b.table(|table| {
-            table
-                .table_head(|thead| {
-                    thead.table_row(|tr| {
-                        tr.table_header(|th| th.text("Nr.").scope("col"))
-                            .table_header(|th| th.text("Navn").scope("col"))
-                            .table_header(|th| th.text("Score").scope("col"))
-                    })
-                })
-                .push(if no_scores {
-                    TableBody::builder()
-                        .table_row(|tr| {
-                            tr.table_cell(|td| {
-                                td.text("Der er ingen noteringer endnu").colspan("3")
-                            })
-                        })
-                        .build()
-                } else {
-                    scores
-                });
-            table
+        let thead_labels =
+            ["Nr.", "Navn", "Score"].map(|l| TableHeader::builder().text(l).scope("col").build());
+        let thead = TableHead::builder()
+            .table_row(|tr| tr.extend(thead_labels))
+            .build();
+        let no_scores = hole.scores.is_empty().then(|| {
+            TableRow::builder()
+                .table_cell(|td| td.text("Der er ingen noteringer endnu").colspan("3"))
+                .build()
         });
+        let scores = hole.scores.into_iter().enumerate().map(|s| s.to_html(&()));
+        let tbody = TableBody::builder()
+            .extend(scores)
+            .extend(no_scores)
+            .build();
+        b.table(|table| table.push(thead).push(tbody));
 
-        if self.active(server)? {
-            b.anchor(|a| {
-                a.href(format!(
-                    "/submit_score.html?u={}&t={}&h={}",
-                    self.user, self.tournament, hole.hole_number
-                ))
+        let submit = self.active(server)?.then(|| {
+            let href = format!(
+                "/submit_score.html?u={}&t={}&h={}",
+                self.user, self.tournament, hole.hole_number
+            );
+            Anchor::builder()
                 .text("Indsend notering")
-            });
-        };
+                .href(href)
+                .build()
+        });
+        b.extend(submit);
 
+        // Return
         Ok(b.build())
     }
 }
@@ -277,7 +275,7 @@ impl Fetch for Vec<ShortTournament> {
     type Page = SelectTournamentPage;
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
-        let url = format!("https://{}/{}", server, page.user);
+        let url = format!("{server}/{}", page.user);
         reqwest::blocking::get(url)
             .map_err(|_| Error::Network)?
             .json()
@@ -297,7 +295,7 @@ impl Fetch for Tournament {
     type Page = SelectHolePage;
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
-        let url = format!("https://{server}/{}/{}", page.user, page.tournament);
+        let url = format!("{server}/{}/{}", page.user, page.tournament);
         let client = reqwest::blocking::Client::new();
         client
             .get(url)
@@ -327,10 +325,7 @@ impl Fetch for Hole {
     type Page = ViewHolePage;
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
-        let url = format!(
-            "https://{server}/{}/{}/{}",
-            page.user, page.tournament, page.hole
-        );
+        let url = format!("{server}/{}/{}/{}", page.user, page.tournament, page.hole);
         reqwest::blocking::get(url)
             .map_err(|_| Error::Network)?
             .json()
