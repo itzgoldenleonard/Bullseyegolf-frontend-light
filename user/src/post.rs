@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::get::Score;
+use crate::get::{Fetch, Hole, Score, ViewHolePage};
 use serde::Deserialize;
 use serde_urlencoded as qs;
 use std::env;
@@ -8,14 +8,19 @@ use std::io::stdin;
 /// Main entrypoint for score submission
 pub fn post() -> Result<String, Error> {
     let params = Params::new()?;
+    let score: CustomScore = qs::from_reader(stdin()).map_err(|_| Error::InvalidForm)?;
 
-    let mut score_buffer = String::new();
-    let _ = stdin().read_line(&mut score_buffer).map_err(Error::FormRead)?;
-    let score: CustomScore = qs::from_str(&score_buffer).map_err(|_| Error::InvalidForm)?; // TODO: Try with from_reader
-    submit_score(&params, score.into())?;
+    let page = ViewHolePage {
+        user: params.query_args.user.clone(),
+        tournament: params.query_args.tournament.clone(),
+        hole: params.query_args.hole,
+    };
+    let hole = Hole::fetch(&params.server, &page)?;
+
+    submit_score(&params, score.into(), hole)?;
     Ok(format!(
         "Status: 303\r\nLocation: ?u={}&t={}&h={}\r\n\r\n\r\n",
-        params.query_args.user, params.query_args.tournament, params.query_args.hole
+        page.user, page.tournament, page.hole
     ))
 }
 
@@ -74,11 +79,35 @@ impl From<CustomScore> for Score {
     }
 }
 
-fn submit_score(params: &Params, score: Score) -> Result<reqwest::blocking::Response, Error> {
+impl Score {
+    fn is_first(&self, leaderboard: &[Score]) -> bool {
+        if leaderboard.is_empty() { return true };
+        self.player_score < leaderboard[0].player_score
+    }
+
+    fn is_duplicate(&self, leaderboard: &[Score]) -> bool {
+        leaderboard.iter().any(|s| s == self)
+    }
+}
+
+fn submit_score(params: &Params, mut score: Score, leaderboard: Hole) -> Result<(), Error> {
     let url = format!(
-        "https://{}/{}/{}/{}",
+        "{}/{}/{}/{}",
         params.server, params.query_args.user, params.query_args.tournament, params.query_args.hole
     );
-    let client = reqwest::blocking::Client::new();
-    client.post(url).json(&score).send().map_err(|_| Error::Network)
+
+    if !score.is_first(&leaderboard.scores) {
+        score.player_name += " 🏴";
+    }
+
+    if !score.is_duplicate(&leaderboard.scores) {
+        let client = reqwest::blocking::Client::new();
+        client
+            .post(url)
+            .json(&score)
+            .send()
+            .map_err(|_| Error::Network)?;
+    }
+
+    Ok(())
 }

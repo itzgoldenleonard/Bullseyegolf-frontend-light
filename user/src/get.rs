@@ -173,10 +173,10 @@ impl Render for SelectHolePage {
     }
 }
 
-struct ViewHolePage {
-    user: String,
-    tournament: String,
-    hole: u8,
+pub struct ViewHolePage {
+    pub user: String,
+    pub tournament: String,
+    pub hole: u8,
 }
 
 impl ToHtml<TableRow, ()> for (usize, Score) {
@@ -304,14 +304,14 @@ impl Fetch for Tournament {
 }
 
 #[derive(Deserialize)]
-struct Hole {
+pub struct Hole {
     hole_number: u8,
     hole_text: String,    // Optional
     hole_sponsor: String, // Optional
-    scores: Vec<Score>,   // Optional
+    pub scores: Vec<Score>,   // Optional
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq)]
 pub struct Score {
     pub player_name: String,
     pub player_score: f64,
@@ -350,7 +350,7 @@ trait Render {
     fn render(&self, server: &str) -> Result<Body, Error>;
 }
 
-trait Fetch: Sized {
+pub trait Fetch: Sized {
     type Page;
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error>;
 }
