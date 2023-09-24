@@ -33,10 +33,9 @@ struct QueryParams {
 
 impl Params {
     pub fn new() -> Result<Self, Error> {
-        let query_string =
-            env::var("QUERY_STRING").map_err(|e| Error::EnvVarRead("QUERY_STRING", e))?;
-        let query_args = qs::from_str(&query_string).map_err(|_| Error::InvalidQueryString)?;
-        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarRead("SERVER_URL", e))?;
+        let query_string = env::var("QUERY_STRING")?;
+        let query_args = qs::from_str(&query_string)?;
+        let server = env::var("SERVER_URL")?;
         Ok(Params { server, query_args })
     }
 }
@@ -120,12 +119,7 @@ impl Render for SelectTournamentPage {
 }
 
 fn secs_since_epoch() -> Result<u64, Error> {
-    Ok(SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| {
-            Error::GenericServer("Unable to calculate current time (time went backwards)")
-        })?
-        .as_secs())
+    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
 struct SelectHolePage {
@@ -276,10 +270,7 @@ impl Fetch for Vec<ShortTournament> {
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
         let url = format!("{server}/{}", page.user);
-        reqwest::blocking::get(url)
-            .map_err(|_| Error::Network)?
-            .json()
-            .map_err(|_| Error::Network)
+        reqwest::blocking::get(url)?.json().map_err(Error::from)
     }
 }
 
@@ -300,19 +291,18 @@ impl Fetch for Tournament {
         client
             .get(url)
             .header("No-Hole-Images", "true")
-            .send()
-            .map_err(|_| Error::Network)?
+            .send()?
             .json()
-            .map_err(|_| Error::Network)
+            .map_err(Error::from)
     }
 }
 
 #[derive(Deserialize)]
 pub struct Hole {
     hole_number: u8,
-    hole_text: String,    // Optional
-    hole_sponsor: String, // Optional
-    pub scores: Vec<Score>,   // Optional
+    hole_text: String,      // Optional
+    hole_sponsor: String,   // Optional
+    pub scores: Vec<Score>, // Optional
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
@@ -326,10 +316,7 @@ impl Fetch for Hole {
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
         let url = format!("{server}/{}/{}/{}", page.user, page.tournament, page.hole);
-        reqwest::blocking::get(url)
-            .map_err(|_| Error::Network)?
-            .json()
-            .map_err(|_| Error::Network)
+        reqwest::blocking::get(url)?.json().map_err(Error::from)
     }
 }
 

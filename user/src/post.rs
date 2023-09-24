@@ -30,10 +30,10 @@ struct Params {
 
 impl Params {
     pub fn new() -> Result<Self, Error> {
-        let server = env::var("SERVER_URL").map_err(|e| Error::EnvVarRead("SERVER_URL", e))?;
+        let server = env::var("SERVER_URL")?;
         let query_string = env::var("HTTP_REFERER").map_err(|_| Error::Referer)?;
         let query_string = query_string.split_once('?').ok_or(Error::Referer)?.1;
-        let query_args = qs::from_str(query_string).map_err(|_| Error::InvalidQueryString)?;
+        let query_args = qs::from_str(query_string)?;
         Ok(Params { server, query_args })
     }
 }
