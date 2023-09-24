@@ -1,7 +1,5 @@
 # Get
 ## General
-- [-] Make submit functionality
-    - [ ] Clean up code
 - [ ] Tests and error handling
     - [ ] Implement From on other error types so that I dont need to use `map_err`
     - [ ] Explain errors properly

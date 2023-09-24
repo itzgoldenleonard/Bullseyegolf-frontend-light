@@ -173,9 +173,13 @@ impl Render for SelectHolePage {
     }
 }
 
+#[derive(Debug, Deserialize)]
 pub struct ViewHolePage {
+    #[serde(rename = "u")]
     pub user: String,
+    #[serde(rename = "t")]
     pub tournament: String,
+    #[serde(rename = "h")]
     pub hole: u8,
 }
 
