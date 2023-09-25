@@ -9,7 +9,7 @@ use std::io::stdin;
 pub fn post() -> Result<String, Error> {
     let params = Params::new()?;
     let score: Score = qs::from_reader::<CustomScore, _>(stdin())
-        .map_err(|_| Error::InvalidForm)?
+        .map_err(Error::InvalidForm)?
         .into();
 
     let leaderboard = Hole::fetch(&params.server, &params.query_args)?.scores;
@@ -87,9 +87,5 @@ fn submit_score(
         params.server, params.query_args.user, params.query_args.tournament, params.query_args.hole
     );
     let client = reqwest::blocking::Client::new();
-    client
-        .post(url)
-        .json(&score)
-        .send()
-        .map_err(|_| Error::Network)
+    Ok(client.post(url).json(&score).send()?.error_for_status()?)
 }

@@ -3,6 +3,7 @@ use html::inline_text::Anchor;
 use html::root::{Body, Html};
 use html::tables::{TableBody, TableHead, TableHeader, TableRow};
 use html::text_content::{ListItem, Paragraph, UnorderedList};
+use reqwest::blocking as http;
 use serde::{Deserialize, Serialize};
 use serde_urlencoded as qs;
 use std::env;
@@ -270,7 +271,7 @@ impl Fetch for Vec<ShortTournament> {
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
         let url = format!("{server}/{}", page.user);
-        reqwest::blocking::get(url)?.json().map_err(Error::from)
+        Ok(http::get(url)?.error_for_status()?.json()?)
     }
 }
 
@@ -287,13 +288,13 @@ impl Fetch for Tournament {
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
         let url = format!("{server}/{}/{}", page.user, page.tournament);
-        let client = reqwest::blocking::Client::new();
-        client
+        let client = http::Client::new();
+        Ok(client
             .get(url)
             .header("No-Hole-Images", "true")
             .send()?
-            .json()
-            .map_err(Error::from)
+            .error_for_status()?
+            .json()?)
     }
 }
 
@@ -316,7 +317,7 @@ impl Fetch for Hole {
 
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error> {
         let url = format!("{server}/{}/{}/{}", page.user, page.tournament, page.hole);
-        reqwest::blocking::get(url)?.json().map_err(Error::from)
+        Ok(http::get(url)?.error_for_status()?.json()?)
     }
 }
 
