@@ -62,10 +62,10 @@ impl From<CustomScore> for Score {
 
 impl Score {
     fn is_first(&self, leaderboard: &[Score]) -> bool {
-        if leaderboard.is_empty() {
-            return true;
-        };
-        self.player_score < leaderboard[0].player_score
+        leaderboard
+            .get(0)
+            .map(|s| self.player_score < s.player_score)
+            .unwrap_or(true)
     }
 
     fn is_duplicate(&self, leaderboard: &[Score]) -> bool {

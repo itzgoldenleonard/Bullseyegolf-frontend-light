@@ -7,14 +7,21 @@ padding:0 1em}
 
 h1,h2,h3,h4{line-height:1.2}
 
-kbd,pre{
-border: #888 solid 1px;
-border-radius: 6px;
-padding: 0.2em 0.4em;
-overflow-x: scroll}
-
 #title{
-text-align: center;
-margin-bottom: 1em}
+text-align:center;
+margin-bottom:1em;
+border-bottom:solid 1px}
+
+table{
+width:100%;
+border-collapse:collapse}
+
+th,td{
+border:1px solid color-mix(in srgb, currentcolor 60%, transparent);
+padding:.2rem .45rem}
+
+th:nth-child(1) {width:0}
+
+tbody tr:nth-child(odd) {background-color: color-mix(in srgb, currentcolor 5%, transparent)}
 
 @media print{body{max-width:none}}
