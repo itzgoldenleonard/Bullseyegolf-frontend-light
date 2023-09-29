@@ -332,7 +332,7 @@ fn insert_into_template(content: Body) -> Html {
                 })
                 .meta(|meta| meta.name("color-scheme").content("light dark"))
                 .link(|link| link.rel("stylesheet").href("/user.css"))
-                .title_attr("Bullseyegolf light")
+                .title(|title| title.text("Bullseyegolf light"))
         })
         .push(content)
         .build()

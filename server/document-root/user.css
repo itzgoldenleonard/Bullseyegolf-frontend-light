@@ -17,6 +17,7 @@ width:100%;
 border-collapse:collapse}
 
 th,td{
+border: 1px solid;/*For old browser compatibility*/
 border:1px solid color-mix(in srgb, currentcolor 60%, transparent);
 padding:.2rem .45rem}
 
