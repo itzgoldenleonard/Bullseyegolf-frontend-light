@@ -4,5 +4,5 @@ WORKDIR ./
 
 COPY docker.conf /etc/lighttpd/lighttpd.conf
 
-COPY --chown=www-data:www-data user/target/release/user /var/www/html/u
+COPY --chown=www-data:www-data user/target/release/user /var/www/html/u.cgi
 COPY server/document-root /var/www/html/
