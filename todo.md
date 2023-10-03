@@ -1,11 +1,18 @@
 # Get
 ## General
 - [ ] Setup with server
-    - [ ] Figure out how to create a binary that can be run in the container
+    - [-] Figure out how to create a binary that can be run in the container
     - [ ] Make the image not huge
     - [ ] Differentiate behavior based on subdomain
     - [ ] Intergrate it into docker-compose
     - [ ] Proxy from API
+- [ ] Change some styling 
+    - [ ] Increase touch targets of anchors (display: block and padding-block: ~1rem)
+    - [ ] Increase touch targets of inputs (font(-size): 1rem)
+    - [ ] Possibly center the submit button
+    - [ ] Reconsider the line below the title
+    - [ ] Make the not required text \<sup\> or small or something like that
+- [ ] Finish Cargo.toml
 - [ ] Write documentation
 - [ ] Link to bullseyegolf light from regular bullseyegolf
 - [ ] Optimizations
