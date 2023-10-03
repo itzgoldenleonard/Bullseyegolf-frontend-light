@@ -1,7 +1,7 @@
 # Get
 ## General
 - [ ] Setup with server
-    - [ ] TLS
+    - [ ] http3?
 - [ ] Change some styling 
     - [ ] Increase touch targets of anchors (display: block and padding-block: ~1rem)
     - [ ] Increase touch targets of inputs (font(-size): 1rem)

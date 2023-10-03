@@ -2,13 +2,16 @@
 
 let 
     lighttpdConfig = pkgs.writeText "lighttpd.conf" ''
-        server.modules += ("mod_openssl", "mod_setenv", "mod_cgi", "mod_access", "mod_alias", "mod_proxy")
+        server.modules += ("mod_openssl", "mod_setenv", "mod_cgi", "mod_access", "mod_alias", "mod_proxy", "mod_redirect")
         server.port = 443
         server.name = "localhost"
+        ssl.engine = "enable"
+        ssl.pemfile = "/certs/fullchain.pem"
         url.access-deny = ("~", ".inc")
         server.max-fds = 1024
         server.follow-symlink = "enable"
         server.document-root = "${lighttpdWebRoot}"
+        setenv.add-response-header = ("Referrer-Policy" => "same-origin")
 
         # Bullseyegolf light
         $HTTP["host"] =^ "light" {
@@ -31,6 +34,7 @@ let
                 "host"         => 1,
             )
         }
+
     '';
     lighttpdWebRoot = (gitRepo + "/server/document-root");
     apiHost = "api";
@@ -57,7 +61,7 @@ in pkgs.dockerTools.buildImage {
     '';
     config = {
         Cmd = [ "/bin/lighttpd" "-D" "-f" lighttpdConfig ];
-        ExposedPorts = { "4430/tcp" = {}; };
+        ExposedPorts = { "443/tcp" = {}; };
     };
 }
 
