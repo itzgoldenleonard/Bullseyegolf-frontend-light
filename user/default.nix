@@ -4,7 +4,7 @@
 , fetchFromGitHub ? pkgs.fetchFromGitHub }:
 
 let 
-    gitRepo = pkgs.fetchFromGitHub {
+    gitRepo = fetchFromGitHub {
         owner = "itzgoldenleonard";
         repo = "bullseyegolf-frontend-light";
         rev = "eba1714ae47baa1a881c4b9c851c68efd7e63e50";
