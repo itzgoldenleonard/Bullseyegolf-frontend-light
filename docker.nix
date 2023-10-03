@@ -2,19 +2,27 @@
 
 let 
     lighttpdConfig = pkgs.writeText "lighttpd.conf" ''
-        server.modules += ("mod_openssl", "mod_setenv", "mod_cgi", "mod_access", "mod_alias")
-        server.document-root = "${lighttpdWebRoot}"
+        server.modules += ("mod_openssl", "mod_setenv", "mod_cgi", "mod_access", "mod_alias", "mod_proxy")
         server.port = 4430
         server.name = "localhost"
         url.access-deny = ("~", ".inc")
         server.max-fds = 1024
         server.follow-symlink = "enable"
-        $HTTP["url"] =$ "/u" {
-            setenv.set-environment = ( "SERVER_URL" => "${bullseyegolfApiServer}" )
-            alias.url = (
-                "/u" => "/bin/user" # TODO: This might change once I get the Cargo.toml sorted
+        server.document-root = "${lighttpdWebRoot}"
+
+        # Bullseyegolf light
+        $HTTP["host"] =^ "light" {
+            $HTTP["url"] =$ "/u" {
+                setenv.set-environment = ( "SERVER_URL" => "${bullseyegolfApiServer}" )
+                alias.url = (
+                    "/u" => "/bin/user" # TODO: This might change once I get the Cargo.toml sorted
+                )
+                cgi.assign = ("" => "")
+            }
+        } else {
+            proxy.server  = ( "" =>
+                (( "host" => "api.bullseyegolf.org", "port" => 80 ))
             )
-            cgi.assign = ("" => "")
         }
     '';
     lighttpdWebRoot = (gitRepo + "/server/document-root");

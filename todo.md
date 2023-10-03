@@ -1,9 +1,9 @@
 # Get
 ## General
 - [ ] Setup with server
-    - [ ] Differentiate behavior based on subdomain
     - [ ] Intergrate it into docker-compose
     - [ ] Proxy from API
+    - [ ] TLS
 - [ ] Change some styling 
     - [ ] Increase touch targets of anchors (display: block and padding-block: ~1rem)
     - [ ] Increase touch targets of inputs (font(-size): 1rem)
