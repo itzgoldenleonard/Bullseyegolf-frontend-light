@@ -1,8 +1,6 @@
 # Get
 ## General
 - [ ] Setup with server
-    - [ ] Intergrate it into docker-compose
-    - [ ] Proxy from API
     - [ ] TLS
 - [ ] Change some styling 
     - [ ] Increase touch targets of anchors (display: block and padding-block: ~1rem)

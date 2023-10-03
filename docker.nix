@@ -3,7 +3,7 @@
 let 
     lighttpdConfig = pkgs.writeText "lighttpd.conf" ''
         server.modules += ("mod_openssl", "mod_setenv", "mod_cgi", "mod_access", "mod_alias", "mod_proxy")
-        server.port = 4430
+        server.port = 443
         server.name = "localhost"
         url.access-deny = ("~", ".inc")
         server.max-fds = 1024
@@ -13,7 +13,7 @@ let
         # Bullseyegolf light
         $HTTP["host"] =^ "light" {
             $HTTP["url"] =$ "/u" {
-                setenv.set-environment = ( "SERVER_URL" => "${bullseyegolfApiServer}" )
+                setenv.set-environment = ( "SERVER_URL" => "${apiUrl}" )
                 alias.url = (
                     "/u" => "/bin/user" # TODO: This might change once I get the Cargo.toml sorted
                 )
@@ -21,12 +21,21 @@ let
             }
         } else {
             proxy.server  = ( "" =>
-                (( "host" => "api.bullseyegolf.org", "port" => 80 ))
+                (( "host" => "${apiHost}", "port" => ${apiPort} ))
+            )
+            # The following doesn't seem to be neccessary locally
+            # but cloudflare might need it
+            proxy.forwarded = (
+                "for"          => 1,
+                "proto"        => 1,
+                "host"         => 1,
             )
         }
     '';
     lighttpdWebRoot = (gitRepo + "/server/document-root");
-    bullseyegolfApiServer = "https://api.bullseyegolf.org";
+    apiHost = "api";
+    apiPort = "8000";
+    apiUrl = "http://${apiHost}:${apiPort}";
     gitRepo = pkgs.fetchFromGitHub {
         owner = "itzgoldenleonard";
         repo = "bullseyegolf-frontend-light";
