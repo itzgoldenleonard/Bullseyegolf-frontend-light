@@ -1,7 +1,13 @@
 [package]
-name = "user"
+name = "bullseyegolf-frontend-light-user"
 version = "0.1.0"
 edition = "2021"
+authors = ["Ava Drumm"]
+description = "Digital scoreboard for golf contest 'nearest pin'. Server rendered minimalist web version."
+documentation = "https://github.com/itzgoldenleonard/bullseyeGolf-frontend-light"
+repository = "https://github.com/itzgoldenleonard/bullseyegolf-frontend-light"
+homepage = "https://bullseyegolf.org"
+license = "AGPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

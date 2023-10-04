@@ -18,7 +18,7 @@ let
             $HTTP["url"] =$ "/u" {
                 setenv.set-environment = ( "SERVER_URL" => "${apiUrl}" )
                 alias.url = (
-                    "/u" => "/bin/user" # TODO: This might change once I get the Cargo.toml sorted
+                    "/u" => "/bin/bullseyegolf-frontend-light-user"
                 )
                 cgi.assign = ("" => "")
             }
