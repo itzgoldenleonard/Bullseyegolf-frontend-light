@@ -1,7 +1,7 @@
 body{
 margin:0 auto;
 max-width:50em;
-font:16px/1.5 'Roboto', 'Segoe', 'Segoe UI', 'Arial', sans-serif;
+font:17px/1.5 'Roboto', 'Segoe', 'Segoe UI', 'Arial', sans-serif;
 padding:0 1em}
 
 
@@ -12,7 +12,7 @@ text-align:center;
 margin-bottom:1em;
 border-bottom:solid 1px}
 
-table{
+table,input[type="submit"]{
 width:100%;
 border-collapse:collapse}
 
@@ -21,8 +21,14 @@ border: 1px solid;/*For old browser compatibility*/
 border:1px solid color-mix(in srgb, currentcolor 60%, transparent);
 padding:.2rem .45rem}
 
-th:nth-child(1) {width:0}
+a{
+display: block;
+padding-block: .7rem}
 
-tbody tr:nth-child(odd) {background-color: color-mix(in srgb, currentcolor 5%, transparent)}
+input{font-size: 1rem}
+
+th:nth-child(1){width:0}
+
+tbody tr:nth-child(odd){background-color: color-mix(in srgb, currentcolor 5%, transparent)}
 
 @media print{body{max-width:none}}
