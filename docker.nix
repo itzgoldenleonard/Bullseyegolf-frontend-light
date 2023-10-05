@@ -43,8 +43,8 @@ let
     gitRepo = pkgs.fetchFromGitHub {
         owner = "itzgoldenleonard";
         repo = "bullseyegolf-frontend-light";
-        rev = "eba1714ae47baa1a881c4b9c851c68efd7e63e50";
-        sha256 = "sha256-ngzzR+WXGnObh+hIMvn6odr/3riSmKBuEuL01IiClG8=";
+        rev = "37bb592611e0bb280ee9e6f61d776456ef5a54a2";
+        sha256 = "sha256-yuzz9kPZiZcOAXgUmkd6cRIELTlZaLaJ/A3ejWOc1tI=";
     };
     bullseyegolfLight = import ./user/default.nix { inherit pkgs; };
 in pkgs.dockerTools.buildImage {
