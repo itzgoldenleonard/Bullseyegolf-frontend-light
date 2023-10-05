@@ -1,3 +1,4 @@
 server/document-root/mockups
 todo.md
 test.conf
+*.nix
