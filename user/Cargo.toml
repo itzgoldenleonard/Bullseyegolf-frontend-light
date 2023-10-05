@@ -1,6 +1,6 @@
 [package]
 name = "bullseyegolf-frontend-light-user"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["Ava Drumm"]
 description = "Digital scoreboard for golf contest 'nearest pin'. Server rendered minimalist web version."

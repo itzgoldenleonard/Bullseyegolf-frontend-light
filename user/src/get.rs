@@ -17,11 +17,13 @@ pub fn get() -> Result<String, Error> {
     Ok(insert_into_template(content).to_string())
 }
 
+/// All the state needed to know how to run the program
 struct Params {
     server: String,
     query_args: QueryParams,
 }
 
+/// The parameters to be collected from the query string
 #[derive(Deserialize)]
 struct QueryParams {
     #[serde(rename = "u")]
@@ -65,6 +67,7 @@ impl TryFrom<Params> for Body {
     }
 }
 
+/// The page that shows the tournament selection screen
 struct SelectTournamentPage {
     user: String,
 }
@@ -81,15 +84,20 @@ impl ToHtml<ListItem, SelectTournamentPage> for ShortTournament {
 }
 
 impl Render for SelectTournamentPage {
+    /**
+     * All 3 of these functions follow this general pattern:
+     *
+     * 1. Define an [`html::root::builders::BodyBuilder`] to create the return value
+     * 2. Fetch the needed data from the API server
+     * 3. One by one create the elements for the page and append them to the `BodyBuilder`
+     * 4. Return the built [`Body`] wrapped in [`Ok`]
+     */
     fn render(&self, server: &str) -> Result<Body, Error> {
-        // The obligatory builder
         let mut b = Body::builder();
 
-        // Fetch data
         let tournaments: Vec<ShortTournament> = Fetch::fetch(server, self)?;
         let current_time = secs_since_epoch()?;
 
-        // Create and append elements to body
         b.heading_1(|h1| h1.id("title").text("Vælg en turnering"))
             .heading_2(|h2| h2.text("Aktive turneringer"));
 
@@ -114,7 +122,6 @@ impl Render for SelectTournamentPage {
                 .push(inactive);
         };
 
-        // Return
         Ok(b.build())
     }
 }
@@ -123,6 +130,7 @@ fn secs_since_epoch() -> Result<u64, Error> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
+/// The page that shows the hole selection screen
 struct SelectHolePage {
     user: String,
     tournament: String,
@@ -142,6 +150,7 @@ impl ToHtml<ListItem, SelectHolePage> for Hole {
 }
 
 impl Render for SelectHolePage {
+    /// See [`SelectTournamentPage::render`]
     fn render(&self, server: &str) -> Result<Body, Error> {
         let mut b = Body::builder();
 
@@ -168,6 +177,12 @@ impl Render for SelectHolePage {
     }
 }
 
+/** 
+ * The page that shows the hole with all the scores
+ *
+ * This is also used as query string parameters in [`crate::post`] which is why it implements
+ * [`Deserialize`]
+ */
 #[derive(Debug, Deserialize)]
 pub struct ViewHolePage {
     #[serde(rename = "u")]
@@ -189,6 +204,7 @@ impl ToHtml<TableRow, ()> for (usize, Score) {
 }
 
 impl Render for ViewHolePage {
+    /// See [`SelectTournamentPage::render`]
     fn render(&self, server: &str) -> Result<Body, Error> {
         let mut b = Body::builder();
 
@@ -257,6 +273,11 @@ impl ViewHolePage {
     }
 }
 
+/**
+ * See the definition at:
+ *
+ * <https://github.com/itzgoldenleonard/BullseyeGolf-server/blob/main/openapi.yaml#L307>
+ */
 #[derive(Deserialize)]
 struct ShortTournament {
     active: bool,
@@ -275,12 +296,18 @@ impl Fetch for Vec<ShortTournament> {
     }
 }
 
+/**
+ * See the definition at:
+ *
+ * <https://github.com/itzgoldenleonard/BullseyeGolf-server/blob/main/openapi.yaml#L275>
+ */
 #[derive(Deserialize)]
 struct Tournament {
-    //tournament_id: String,
     tournament_name: String,
-    tournament_sponsor: String, // Optional
-    holes: Vec<Hole>,           // Optional
+    /// Optional
+    tournament_sponsor: String,
+    /// Optional
+    holes: Vec<Hole>,
 }
 
 impl Fetch for Tournament {
@@ -298,14 +325,27 @@ impl Fetch for Tournament {
     }
 }
 
+/**
+ * See the definition at:
+ *
+ * <https://github.com/itzgoldenleonard/BullseyeGolf-server/blob/main/openapi.yaml#L242>
+ */
 #[derive(Deserialize)]
 pub struct Hole {
     hole_number: u8,
-    hole_text: String,      // Optional
-    hole_sponsor: String,   // Optional
-    pub scores: Vec<Score>, // Optional
+    /// Optional
+    hole_text: String,
+    /// Optional
+    hole_sponsor: String,
+    /// Optional
+    pub scores: Vec<Score>,
 }
 
+/**
+ * See the definition at:
+ *
+ * <https://github.com/itzgoldenleonard/BullseyeGolf-server/blob/main/openapi.yaml#L226>
+ */
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct Score {
     pub player_name: String,
@@ -321,6 +361,12 @@ impl Fetch for Hole {
     }
 }
 
+/** 
+ * Shared HTML for all 3 pages
+ *
+ * This function inserts the [`Body`], which is the only part that
+ * differs between the pages into the template
+ */
 fn insert_into_template(content: Body) -> Html {
     Html::builder()
         .lang("da")
@@ -338,15 +384,18 @@ fn insert_into_template(content: Body) -> Html {
         .build()
 }
 
+/// Renders the page as HTML
 trait Render {
     fn render(&self, server: &str) -> Result<Body, Error>;
 }
 
+/// Fetches data from the API corresponding to what's needed for [`Fetch::Page`]
 pub trait Fetch: Sized {
     type Page;
     fn fetch(server: &str, page: &Self::Page) -> Result<Self, Error>;
 }
 
+/// Converts `self` to a sensible HTML element `T` to be shown on the page `P`
 trait ToHtml<T, P> {
     fn to_html(&self, page: &P) -> T;
 }

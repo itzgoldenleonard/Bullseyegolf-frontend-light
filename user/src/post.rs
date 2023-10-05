@@ -23,6 +23,11 @@ pub fn post() -> Result<String, Error> {
     ))
 }
 
+/**
+ * All the state needed to know how to run the program
+ *
+ * This is different from [`crate::get`]'s `Params` because none of the `query_args` are optional
+ */
 struct Params {
     server: String,
     query_args: ViewHolePage,
@@ -38,6 +43,11 @@ impl Params {
     }
 }
 
+/**
+ * The custom format for a score used by the HTML form
+ *
+ * Can be losslessly converted to a proper [`Score`]
+ */
 #[derive(Deserialize, Debug)]
 struct CustomScore {
     name: String,
@@ -68,11 +78,19 @@ impl Score {
             .unwrap_or(true)
     }
 
+    /// Does this Score already exist in the given leaderboard
     fn is_duplicate(&self, leaderboard: &[Score]) -> bool {
         leaderboard.iter().any(|s| s == self)
     }
 }
 
+/**
+ * Submits `score` to the API server
+ *
+ * Only submits if `score` is not already present in `leaderboard`
+ *
+ * If `score` is not first in `leaderboard` the "🏴" emoji is appended to its name
+ */
 fn submit_score(
     params: &Params,
     mut score: Score,

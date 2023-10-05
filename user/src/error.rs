@@ -2,12 +2,18 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
+    /// Query string does not exist or is not valid
     InvalidQueryString,
+    /// Generic network error, this will probably never actually happen
     Network(reqwest::Error),
+    /// Used in [`crate::post`] if no valid query string can be found in the Referer HTTP header
     Referer,
+    /// Usid in [`crate::post`] if the HTML form submitted is not valid
     InvalidForm(serde_urlencoded::de::Error),
+    /// Anything that warrants a bug report
     CriticalServer(Box<dyn std::error::Error>),
     BackendConnection(reqwest::Error),
+    /// The API server responded with an error
     BackendStatus(reqwest::Error),
 }
 
